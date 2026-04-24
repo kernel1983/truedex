@@ -1,0 +1,22 @@
+[package]
+name = "token-locker"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+solana-native = []
+
+[dependencies]
+solana-program = "1.18"
+spl-token = "4.0"
+bytemuck = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
