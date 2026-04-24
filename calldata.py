@@ -9,7 +9,7 @@ from solders.transaction import Transaction
 from solders.instruction import Instruction, AccountMeta as AM
 import base64
 
-PROG = "EiNHPv89CvbRLF5ioYAHqGNvrPPXZUEiLkGUBVfbJxto"
+PROG = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
 
 def main():
     if len(sys.argv) != 2:

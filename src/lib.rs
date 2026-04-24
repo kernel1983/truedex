@@ -62,47 +62,40 @@ fn initialize_vault(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramRes
     
     let acc_iter = &mut accounts.iter();
     let vault_state_acc = next_account_info(acc_iter)?;
-    msg!("  vault_state: {}", vault_state_acc.key);
-    
     let payer_acc = next_account_info(acc_iter)?;
-    msg!("  payer: {}", payer_acc.key);
-    
     let operator_acc = next_account_info(acc_iter)?;
-    msg!("  operator: {}", operator_acc.key);
-    
     let system_program = next_account_info(acc_iter)?;
-    msg!("  system_program: {}", system_program.key);
     
-    msg!("INIT: Got all accounts, validating...");
-    
-    if !vault_state_acc.is_writable {
-        msg!("ERROR: vault_state not writable");
+    let (pda, bump) = Pubkey::find_program_address(&[b"vault"], program_id);
+    if vault_state_acc.key != &pda {
+        msg!("ERROR: Invalid vault state PDA");
         return Err(ProgramError::InvalidAccountData);
     }
 
-    msg!("INIT: Creating state...");
-    
-    msg!("  Writing state data...");
+    if vault_state_acc.data_is_empty() {
+        msg!("INIT: Creating PDA account...");
+        let rent = Rent::get()?;
+        let space = VAULT_STATE_SIZE;
+        let lamports = rent.minimum_balance(space);
+        
+        invoke_signed(
+            &system_instruction::create_account(
+                payer_acc.key,
+                vault_state_acc.key,
+                lamports,
+                space as u64,
+                program_id,
+            ),
+            &[payer_acc.clone(), vault_state_acc.clone(), system_program.clone()],
+            &[&[b"vault", &[bump]]],
+        )?;
+    }
     
     let state = VaultState {
         operator: *operator_acc.key,
-        bump: 255,
+        bump,
     };
     
-    // Get account data - handle both cases
-    {
-        let data = vault_state_acc.data.borrow();
-        if data.len() == 0 {
-            msg!("INIT: WARN - no data pre-allocated, skipping write");
-            return Ok(());
-        }
-        if data.len() < VAULT_STATE_SIZE {
-            msg!("INIT: WARN - insufficient data ({} bytes), skipping", data.len());
-            return Ok(());
-        }
-    }
-    
-    // We have space, write now
     let mut data = vault_state_acc.data.borrow_mut();
     data[..32].copy_from_slice(&state.operator.to_bytes());
     data[32] = state.bump;

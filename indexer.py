@@ -13,7 +13,7 @@ from solana.rpc import websocket_api as ws
 from solders.pubkey import Pubkey
 from solders.signature import Signature
 
-PROGRAM_ID = "EiNHPv89CvbRLF5ioYAHqGNvrPPXZUEiLkGUBVfbJxto"
+PROGRAM_ID = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
 RPC_URL = "http://localhost:8899"
 WS_URL = "ws://localhost:8900"
 
