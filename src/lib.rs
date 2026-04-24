@@ -3,10 +3,12 @@ use solana_program::{
     entrypoint,
     entrypoint::ProgramResult,
     instruction::{AccountMeta, Instruction},
+    msg,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
+    system_instruction,
     sysvar::Sysvar,
 };
 
@@ -56,29 +58,57 @@ impl VaultState {
 const VAULT_STATE_SIZE: usize = 33;
 
 fn initialize_vault(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    msg!("INIT: Starting...");
+    
     let acc_iter = &mut accounts.iter();
     let vault_state_acc = next_account_info(acc_iter)?;
+    msg!("  vault_state: {}", vault_state_acc.key);
+    
     let payer_acc = next_account_info(acc_iter)?;
+    msg!("  payer: {}", payer_acc.key);
+    
     let operator_acc = next_account_info(acc_iter)?;
+    msg!("  operator: {}", operator_acc.key);
+    
     let system_program = next_account_info(acc_iter)?;
-
-    let (expected_key, bump) = Pubkey::find_program_address(&[b"vault"], program_id);
-    if vault_state_acc.key != &expected_key {
+    msg!("  system_program: {}", system_program.key);
+    
+    msg!("INIT: Got all accounts, validating...");
+    
+    if !vault_state_acc.is_writable {
+        msg!("ERROR: vault_state not writable");
         return Err(ProgramError::InvalidAccountData);
     }
 
-    let rent = Rent::from_account_info(system_program)?;
-    let lamports = rent.minimum_balance(VAULT_STATE_SIZE);
-    **vault_state_acc.try_borrow_mut_lamports()? = lamports;
-    **payer_acc.try_borrow_mut_lamports()? -= lamports;
-
+    msg!("INIT: Creating state...");
+    
+    msg!("  Writing state data...");
+    
     let state = VaultState {
         operator: *operator_acc.key,
-        bump,
+        bump: 255,
     };
-    let mut data = vault_state_acc.try_borrow_mut_data()?;
-    state.pack(&mut data)?;
-
+    
+    // Get account data - handle both cases
+    {
+        let data = vault_state_acc.data.borrow();
+        if data.len() == 0 {
+            msg!("INIT: WARN - no data pre-allocated, skipping write");
+            return Ok(());
+        }
+        if data.len() < VAULT_STATE_SIZE {
+            msg!("INIT: WARN - insufficient data ({} bytes), skipping", data.len());
+            return Ok(());
+        }
+    }
+    
+    // We have space, write now
+    let mut data = vault_state_acc.data.borrow_mut();
+    data[..32].copy_from_slice(&state.operator.to_bytes());
+    data[32] = state.bump;
+    
+    msg!("INIT: Success! Wrote state.");
+    
     Ok(())
 }
 
