@@ -1,14 +1,10 @@
-import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.min.js";
+import { Connection, PublicKey, Transaction, TransactionInstruction } from 'https://esm.sh/@solana/web3.js@1.95.0';
 
-let rc = React.createElement;
+const rc = React.createElement;
 const LightweightCharts = window.LightweightCharts;
 // const TESTNET_INDEXER_URL = 'https://testnet3.zentra.dev';
 // const TESTNET_INDEXER_URL = 'http://127.0.0.1:8090';
 const TESTNET_INDEXER_URL = 'http://127.0.0.1:3000';
-const CHAIN = 'base';
-// const CHAIN = 'cto';
-const BASE_TOKEN = 'BTC';
-const QUOTE_TOKEN = 'USDC';
 
 const parseJsonWithBigInt = (data_json) => JSON.parse(
   data_json,
@@ -22,6 +18,10 @@ const toBigInt = (value) => {
   if (typeof value === 'string') return BigInt(value);
   if (typeof value === 'number') return BigInt(String(Math.trunc(value)));
   return 0n;
+}
+
+const toUint8Array = (arr) => {
+  return new Uint8Array(arr);
 };
 
 class Header extends React.Component {
@@ -30,7 +30,7 @@ class Header extends React.Component {
   }
 
   render() {
-    const { ethAddress, walletLoading } = this.props.walletState;
+    const { solAddress, walletLoading } = this.props.walletState;
     return rc('header', { className: 'header p-4 flex justify-between items-center bg-gray-800 text-white' },
       rc('div', { className: 'logo flex items-center' },
         rc('img', { src: 'logo.svg', alt: 'Logo', className: 'h-8 w-8 mr-2' }),
@@ -46,8 +46,8 @@ class Header extends React.Component {
       rc('div', { className: 'login' },
         walletLoading ?
           null :
-          (ethAddress ?
-            rc('span', { className: 'font-mono' }, `${ethAddress.substring(0, 6)}...${ethAddress.substring(ethAddress.length - 4)}`) :
+          (solAddress ?
+            rc('span', { className: 'font-mono' }, `${solAddress.substring(0, 6)}...${solAddress.substring(solAddress.length - 4)}`) :
             rc('button', { onClick: this.props.handleWalletLogin, className: 'bg-gray-200 hover:bg-gray-400 text-black font-bold py-2 px-4 rounded' }, 'Connect Wallet'))
       )
     );
@@ -68,7 +68,7 @@ class ChartPanel extends React.Component {
     this.loadHistory();
   }
 
-initChart() {
+  initChart() {
     if (!this.chartRef.current) return;
     this.chart = LightweightCharts.createChart(this.chartRef.current, {
       width: this.chartRef.current.offsetWidth || 600,
@@ -93,7 +93,7 @@ initChart() {
       const response = await fetch(`${TESTNET_INDEXER_URL}/api/history?base=BTC&quote=USDC`);
       const data = await response.json();
       const candles = data.candles || [];
-      
+
       if (this.candleSeries && candles.length > 0) {
         this.candleSeries.setData(candles);
       }
@@ -101,7 +101,7 @@ initChart() {
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  } 
+  }
 
   render() {
     const { history } = this.state;
@@ -161,17 +161,17 @@ class MarketPanel extends React.Component {
       rc('div', { className: 'asks' },
         asks.slice(0, 10).reverse().map((ask, index) =>
           rc('div', { key: index, className: 'flex justify-between p-1 text-red-500' },
-            rc('span', null, ethers.formatUnits(toBigInt(ask.price), 6)),
-            rc('span', null, ethers.formatUnits(-toBigInt(ask.base), 18).substring(0, 8)),
+            rc('span', null, Number(ask.price) / 1e6),
+            rc('span', null, String(Number(ask.base) / 1e18).substring(0, 8)),
           )
         )
       ),
-      rc('div', { className: 'current-price p-2 text-lg font-bold text-center' }, bids.length > 0 ? ethers.formatUnits(toBigInt(bids[0].price), 6) : (asks.length > 0 ? ethers.formatUnits(toBigInt(asks[0].price), 6) : '-')),
+      rc('div', { className: 'current-price p-2 text-lg font-bold text-center' }, bids.length > 0 ? (Number(bids[0].price) / 1e6).toString() : (asks.length > 0 ? (Number(asks[0].price) / 1e6).toString() : '-')),
       rc('div', { className: 'bids' },
         bids.slice(0, 10).map((bid, index) =>
           rc('div', { key: index, className: 'flex justify-between p-1 text-green-500' },
-            rc('span', null, ethers.formatUnits(toBigInt(bid.price), 6)),
-            rc('span', null, ethers.formatUnits(toBigInt(bid.base), 18).substring(0, 8)),
+            rc('span', null, Number(bid.price) / 1e6),
+            rc('span', null, String(Number(bid.base) / 1e18).substring(0, 8)),
           )
         )
       )
@@ -224,7 +224,7 @@ class OrderPanel extends React.Component {
       price: '68000',
       size: '',
       rangeValue: '0',
-      sizeUnit: 'BTC', // BTC or USDC
+      sizeUnit: 'BTC',
       balance: {
         BTC: 0,
         USDC: 0
@@ -243,36 +243,30 @@ class OrderPanel extends React.Component {
   }
 
   componentDidUpdate(prevProps) {
-    if (this.props.signer !== prevProps.signer) {
+    if (this.props.publicKey !== prevProps.publicKey) {
       this.fetchBalances();
     }
   }
 
   fetchBalances = async () => {
-    const { signer } = this.props;
-    if (!signer) {
+    const { publicKey } = this.props;
+    if (!publicKey) {
       return;
     }
-    const address = await signer.getAddress();
+    const address = publicKey.toString();
 
     const tokens = ['USDC', 'BTC'];
-    const decimals = {
-      'USDC': 6,
-      'BTC': 18
-    }
-
     tokens.forEach(async (token) => {
-      if (!token || !decimals[token]) return;
       try {
         const prefix = `${token}-balance:${address.toLowerCase()}`;
         const response = await fetch(`${TESTNET_INDEXER_URL}/api/get_latest_state?prefix=${prefix}`);
         const data_json = await response.text();
         const data = parseJsonWithBigInt(data_json);
-        const formattedBalance = ethers.formatUnits(BigInt(data.result || 0), decimals[token] || 18);
+        const formattedBalance = Number(data.result || 0) / 1e18;
         this.setState(prevState => ({
           balance: {
             ...prevState.balance,
-            [token]: parseFloat(formattedBalance)
+            [token]: formattedBalance
           }
         }));
       } catch (error) {
@@ -297,7 +291,7 @@ class OrderPanel extends React.Component {
       if (price > 0) {
         newSize = sizeUnit === for_token ? (budget / price).toFixed(6) : budget.toFixed(2);
       }
-    } else { // Sell
+    } else {
       const amount = balance[for_token] * (percentage / 100);
       if (price > 0) {
         newSize = sizeUnit === for_token ? amount.toFixed(6) : (amount * price).toFixed(2);
@@ -321,8 +315,8 @@ class OrderPanel extends React.Component {
   }
 
   placeOrder = async () => {
-    const { signer } = this.props;
-    if (!signer) {
+    const { publicKey, sendTransaction } = this.props;
+    if (!publicKey || !sendTransaction) {
       alert('Please connect your wallet first.');
       return;
     }
@@ -330,11 +324,8 @@ class OrderPanel extends React.Component {
     const { activeTab, tradeType, price, size, sizeUnit } = this.state;
     const for_token = 'BTC';
     const quote_token = 'USDC';
-    const ZEN_ADDR = '0x00000000000000000000000000000000007a656e';
-    const base_decimals = 18;
-    const quote_decimals = 6;
+    const prog = new PublicKey(SOLANA_PROGRAM);
 
-    let calldata;
     let base_amount;
     let quote_amount;
 
@@ -343,58 +334,89 @@ class OrderPanel extends React.Component {
         alert('Please enter a valid size and price');
         return;
       }
-      if (sizeUnit === for_token) { // size is in base token
-        base_amount = ethers.parseUnits(size, base_decimals);
-        quote_amount = ethers.parseUnits((parseFloat(size) * parseFloat(price)).toString(), quote_decimals);
-      } else { // size is in USDC
-        quote_amount = ethers.parseUnits(size, quote_decimals);
-        base_amount = ethers.parseUnits((parseFloat(size) / parseFloat(price)).toString(), base_decimals);
+      if (sizeUnit === for_token) {
+        base_amount = BigInt(Math.floor(parseFloat(size) * 1e18)).toString();
+        quote_amount = BigInt(Math.floor(parseFloat(size) * parseFloat(price) * 1e6)).toString();
+      } else {
+        quote_amount = BigInt(Math.floor(parseFloat(size) * 1e6)).toString();
+        base_amount = BigInt(Math.floor(parseFloat(size) / parseFloat(price) * 1e18)).toString();
       }
 
       if (tradeType === 'Buy') {
-        quote_amount = -quote_amount;
-      } else { // Sell
-        base_amount = -base_amount;
+        quote_amount = '-' + quote_amount;
+      } else {
+        base_amount = '-' + base_amount;
       }
 
-      calldata = {
-        'p': 'zentest3',
-        'f': 'trade_limit_order',
-        'a': [for_token, base_amount.toString(), quote_token, quote_amount.toString()]
-      };
+      const calldata = JSON.stringify({
+        f: 'trade_limit_order',
+        a: [for_token, base_amount, quote_token, quote_amount]
+      });
 
-    } else { // Market
+      const data = new TextEncoder().encode(calldata);
+      const instructionData = new Uint8Array([3, ...data]);
+
+      const transaction = new Transaction();
+      const keys = [
+        { pubkey: publicKey, isSigner: false, isWritable: true },
+        { pubkey: publicKey, isSigner: false, isWritable: true },
+        { pubkey: publicKey, isSigner: true, isWritable: false },
+      ];
+      const ix = new TransactionInstruction({
+        programId: prog,
+        keys: keys,
+        data: instructionData,
+      });
+      transaction.add(ix);
+
+      try {
+        const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
+        alert(`Transaction sent: ${signature}`);
+      } catch (error) {
+        console.error('Order failed:', error);
+        alert('Order failed.');
+      }
+    } else {
       if (!size || isNaN(parseFloat(size)) || parseFloat(size) <= 0) {
         alert('Please enter a valid size');
         return;
       }
       if (tradeType === 'Buy') {
-        // Market buy is specified by quote amount to spend
-        quote_amount = -ethers.parseUnits(size, quote_decimals);
+        quote_amount = BigInt(Math.floor(parseFloat(size) * 1e6)).toString();
         base_amount = null;
-      } else { // Market sell is specified by base amount to sell
-        base_amount = -ethers.parseUnits(size, base_decimals);
+      } else {
+        base_amount = BigInt(Math.floor(parseFloat(size) * 1e18)).toString();
         quote_amount = null;
       }
 
-      calldata = {
-        'p': 'zentest3',
-        'f': 'trade_market_order',
-        'a': [for_token, base_amount ? base_amount.toString() : null, quote_token, quote_amount ? quote_amount.toString() : null]
-      };
-    }
-
-    try {
-      console.log('calldata', calldata);
-      const tx = await signer.sendTransaction({
-        to: ZEN_ADDR,
-        value: 0,
-        data: ethers.hexlify(new TextEncoder().encode(JSON.stringify(calldata)))
+      const calldata = JSON.stringify({
+        f: 'trade_market_order',
+        a: [for_token, base_amount ? base_amount.toString() : null, quote_token, quote_amount ? quote_amount.toString() : null]
       });
-      alert(`Transaction sent: ${tx.hash}`);
-    } catch (error) {
-      console.error('Order failed:', error);
-      alert('Order failed.');
+
+      const data = new TextEncoder().encode(calldata);
+      const instructionData = new Uint8Array([3, ...data]);
+
+      const transaction = new Transaction();
+      const keys = [
+        { pubkey: publicKey, isSigner: false, isWritable: true },
+        { pubkey: publicKey, isSigner: false, isWritable: true },
+        { pubkey: publicKey, isSigner: true, isWritable: false },
+      ];
+      const ix = new TransactionInstruction({
+        programId: prog,
+        keys: keys,
+        data: instructionData,
+      });
+      transaction.add(ix);
+
+      try {
+        const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
+        alert(`Transaction sent: ${signature}`);
+      } catch (error) {
+        console.error('Order failed:', error);
+        alert('Order failed.');
+      }
     }
   };
 
@@ -415,10 +437,9 @@ class OrderPanel extends React.Component {
         rc('button', { className: `px-4 py-2 ${this.state.activeTab === 'Market' ? 'border-b-2 border-blue-500' : ''}`, onClick: () => this.handleTabChange('Market') }, 'Market'),
         rc('button', { className: `px-4 py-2 ${this.state.activeTab === 'Limit' ? 'border-b-2 border-blue-500' : ''}`, onClick: () => this.handleTabChange('Limit') }, 'Limit')
       ),
-      rc('div', { className: 'flex mt-4' },
-        rc('button', { className: `flex-1 py-2 ${this.state.tradeType === 'Buy' ? 'bg-green-600' : 'bg-gray-700'}`, onClick: () => this.handleTradeTypeChange('Buy') }, 'Buy'),
-        rc('button', { className: `flex-1 py-2 ${this.state.tradeType === 'Sell' ? 'bg-red-600' : 'bg-gray-700'}`, onClick: () => this.handleTradeTypeChange('Sell') }, 'Sell')
-      ),
+      rc('div', { className: 'flex mt-4' }),
+      rc('button', { className: `flex-1 py-2 ${this.state.tradeType === 'Buy' ? 'bg-green-600' : 'bg-gray-700'}`, onClick: () => this.handleTradeTypeChange('Buy') }, 'Buy'),
+      rc('button', { className: `flex-1 py-2 ${this.state.tradeType === 'Sell' ? 'bg-red-600' : 'bg-gray-700'}`, onClick: () => this.handleTradeTypeChange('Sell') }, 'Sell'),
       rc('div', { className: 'mt-4 space-y-4' },
         rc('div', { className: 'flex justify-between text-sm' },
           rc('span', { className: 'text-gray-400' }, 'Available:'),
@@ -456,10 +477,9 @@ class OrderPanel extends React.Component {
               rc('span', null, '100%')
             )
           ),
-          rc('div', { className: 'flex justify-between text-sm' },
-            rc('span', { className: 'text-gray-400' }, 'Total:'),
-            rc('span', { className: 'font-mono' }, `${total.toFixed(2)} USDC`)
-          )
+          rc('div', { className: 'flex justify-between text-sm' }),
+          rc('span', { className: 'text-gray-400' }, 'Total:'),
+          rc('span', { className: 'font-mono' }, `${total.toFixed(2)} USDC`)
         ),
         rc('button', { className: `w-full mt-4 py-2 rounded text-white font-bold ${tradeTypeClass}`, onClick: this.placeOrder }, `Place ${this.state.tradeType} Order`)
       )
@@ -516,14 +536,14 @@ class AssetsPanel extends React.Component {
     if (!this.props.address) return;
     const tokens = { BTC: 18, USDC: 6 };
     const newState = {};
-    const addr = this.props.address.toLowerCase();
+    const addr = this.props.address.toString().toLowerCase();
     for (const [tick, dec] of Object.entries(tokens)) {
       try {
         const prefix = `${tick}-balance:${addr}`;
         const response = await fetch(`${TESTNET_INDEXER_URL}/api/get_latest_state?prefix=${prefix}`);
         const data = await response.json();
         const val = data.result;
-        newState[tick] = val && val !== '0' ? ethers.formatUnits(toBigInt(val), dec) : '0';
+        newState[tick] = val && val !== '0' ? (Number(val) / 1e18).toString() : '0';
       } catch (e) {
         newState[tick] = '0';
       }
@@ -579,16 +599,23 @@ class ToolPanel extends React.Component {
   }
 }
 
+async function getWallet() {
+  if (typeof window.solana === 'undefined') {
+    return null;
+  }
+  const resp = await window.solana.connect();
+  return resp;
+}
 
 class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       screenWidth: window.innerWidth,
-      ethAddress: null,
-      provider: null,
-      signer: null,
+      solAddress: null,
+      publicKey: null,
       walletLoading: true,
+      sendTransaction: null,
       orderbook: null,
       lastBlock: null,
       trades: [],
@@ -600,9 +627,8 @@ class App extends React.Component {
 
   loadInitialMarketData = async () => {
     try {
-      const response = await fetch(`${TESTNET_INDEXER_URL}/api/orderbook?base=${BASE_TOKEN}&quote=${QUOTE_TOKEN}`);
+      const response = await fetch(`${TESTNET_INDEXER_URL}/api/orderbook?base=BTC&quote=USDC`);
       const data = await response.json();
-      // console.log('Orderbook data:', data);
       this.setState(
         {
           orderbook: { buys: data.buys, sells: data.sells },
@@ -615,103 +641,46 @@ class App extends React.Component {
     }
   }
 
-  // Function for the initial silent check and for handling account changes
   initializeWallet = async () => {
-    if (typeof window.ethereum === 'undefined') {
+    if (typeof window.solana === 'undefined') {
       this.setState({ walletLoading: false });
       return;
     }
 
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-
-      if (accounts.length > 0) {
-        const ethAddress = accounts[0];
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        this.setState({ ethAddress, provider, signer });
-
-        try {
-          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-          if (chainId !== '0x7a69') {
-            try {
-              await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x7a69' }],
-              });
-            } catch (switchError) {
-              if (switchError.code === 4902) {
-                await window.ethereum.request({
-                  method: 'wallet_addEthereumChain',
-                  params: [{
-                    chainId: '0x7a69',
-                    chainName: 'Local Testnet',
-                    rpcUrls: ['http://127.0.0.1:8545'],
-                    nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-                  }],
-                });
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Failed to switch chain:', e);
-        }
+      await window.solana.connect({ onlyIfTrusted: true });
+      const publicKey = window.solana.publicKey;
+      if (publicKey) {
+        this.setState({
+          solAddress: publicKey.toString(),
+          publicKey: publicKey,
+          sendTransaction: window.solana.signTransaction,
+          walletLoading: false
+        });
       } else {
-        this.setState({ ethAddress: null, provider: null, signer: null });
+        this.setState({ walletLoading: false });
       }
     } catch (error) {
       console.error('Error initializing wallet:', error);
-    } finally {
       this.setState({ walletLoading: false });
     }
   }
 
-  // Function for the user explicitly clicking the "Connect Wallet" button
   handleWalletLogin = async () => {
-    if (typeof window.ethereum === 'undefined') {
-      alert('Wallet not installed!');
+    if (typeof window.solana === 'undefined') {
+      alert('Solana wallet not installed!');
       return;
     }
 
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const ethAddress = accounts[0];
-
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-
-      this.setState({ ethAddress, provider, signer, walletLoading: false });
-
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x7a69' }],
-        });
-      } catch (switchError) {
-        if (switchError.code === 4902) {
-          try {
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x7a69',
-                chainName: 'Local Testnet',
-                rpcUrls: ['http://127.0.0.1:8545'],
-                nativeCurrency: {
-                  name: 'Ethereum',
-                  symbol: 'ETH',
-                  decimals: 18,
-                },
-              }],
-            });
-          } catch (addError) {
-            console.error('Failed to add Base Sepolia Testnet:', addError);
-            alert('Failed to add Base Sepolia Testnet.');
-          }
-        } else {
-          console.error('Failed to switch to Base Sepolia Testnet:', switchError);
-          alert('Failed to switch to Base Sepolia Testnet.');
-        }
-      }
+      const resp = await window.solana.connect();
+      const publicKey = resp.publicKey;
+      this.setState({
+        solAddress: publicKey.toString(),
+        publicKey: publicKey,
+        sendTransaction: window.solana.signTransaction,
+        walletLoading: false
+      });
     } catch (error) {
       console.error('Error logging in:', error);
       this.setState({ walletLoading: false });
@@ -727,9 +696,17 @@ class App extends React.Component {
       this.loadInitialMarketData();
     }, 3000);
 
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts) => {
-        this.initializeWallet();
+    if (window.solana) {
+      window.solana.on('connect', () => {
+        this.setState({
+          solAddress: window.solana.publicKey.toString(),
+          publicKey: window.solana.publicKey,
+          sendTransaction: window.solana.signTransaction,
+          walletLoading: false
+        });
+      });
+      window.solana.on('disconnect', () => {
+        this.setState({ solAddress: null, publicKey: null, sendTransaction: null });
       });
     }
   }
@@ -739,9 +716,6 @@ class App extends React.Component {
     this.teardownStream();
     if (this.orderbookInterval) {
       clearInterval(this.orderbookInterval);
-    }
-    if (window.ethereum && window.ethereum.removeListener) {
-      window.ethereum.removeListener('accountsChanged', this.initializeWallet);
     }
   }
 
@@ -759,7 +733,7 @@ class App extends React.Component {
     if (this.ws) return;
     const lastBlockHeight = this.state.lastBlock ? this.state.lastBlock.height : null;
     if (lastBlockHeight === null || lastBlockHeight === undefined) return;
-    const wsUrl = `${TESTNET_INDEXER_URL.replace(/^http/, 'ws')}/api/stream?base=${BASE_TOKEN}&quote=${QUOTE_TOKEN}` +
+    const wsUrl = `${TESTNET_INDEXER_URL.replace(/^http/, 'ws')}/api/stream?base=BTC&quote=USDC` +
       (lastBlockHeight ? `&start_block=${lastBlockHeight}` : '');
 
     try {
@@ -869,12 +843,12 @@ class App extends React.Component {
       rc(InfoPanel, null)
     );
 
-    const orderPanelWithSigner = rc(OrderPanel, { signer: this.state.signer });
+    const orderPanelWithSigner = rc(OrderPanel, { publicKey: this.state.publicKey, sendTransaction: this.state.sendTransaction });
     const marketPanel = rc(MarketPanel, { orderbook: this.state.orderbook, trades: this.state.trades });
-    const assetsPanel = rc(AssetsPanel, { address: this.state.ethAddress });
+    const assetsPanel = rc(AssetsPanel, { address: this.state.publicKey });
     const toolPanel = rc(ToolPanel, null);
 
-    if (this.state.screenWidth < 960) { // Mobile layout
+    if (this.state.screenWidth < 960) {
       return commonLayout(
         rc('div', { className: 'space-y-4' }, mainContent, orderPanelWithSigner, marketPanel, assetsPanel, toolPanel),
         null,
@@ -882,7 +856,7 @@ class App extends React.Component {
       );
     }
 
-    if (this.state.screenWidth < 1400) { // Tablet layout
+    if (this.state.screenWidth < 1400) {
       return commonLayout(
         mainContent,
         rc('div', { className: 'space-y-4' }, orderPanelWithSigner, marketPanel),
@@ -890,7 +864,6 @@ class App extends React.Component {
       );
     }
 
-    // Desktop layout
     return rc('div', { className: 'app' },
       rc(Header, { walletState: this.state, handleWalletLogin: this.handleWalletLogin }),
       rc('main', { className: 'p-4' },
@@ -900,7 +873,7 @@ class App extends React.Component {
             rc(ChartPanel, {
               streamTrades: this.state.streamTrades,
             }),
-            rc(AssetsPanel, { address: this.state.ethAddress })
+            rc(AssetsPanel, { address: this.state.publicKey })
           ),
           rc('div', { className: 'w-80 space-y-4' },
             marketPanel,
