@@ -14,7 +14,7 @@ PROG = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
 
 def main():
     if len(sys.argv) != 5:
-        print("Usage: python3 release_tokens.py <vault_state> <vault> <destination> <amount>")
+        print("Usage: python3 release_tokens.py <vault> <vault_token_account> <destination> <amount>")
         sys.exit(1)
     
     client = Client("http://localhost:8899")
@@ -23,16 +23,16 @@ def main():
     prog = P.from_string(PROG)
     token_prog = TOKEN_PROGRAM_ID
     
-    vault_state = P.from_string(sys.argv[1])
-    vault = P.from_string(sys.argv[2])
+    vault = P.from_string(sys.argv[1])
+    vault_token_account = P.from_string(sys.argv[2])
     destination = P.from_string(sys.argv[3])
     amount = int(sys.argv[4])
     
     release_ix = Instruction(
         program_id=prog,
         accounts=[
-            AM(pubkey=vault_state, is_signer=False, is_writable=False),
-            AM(pubkey=vault, is_signer=False, is_writable=True),
+            AM(pubkey=vault, is_signer=False, is_writable=False),
+            AM(pubkey=vault_token_account, is_signer=False, is_writable=True),
             AM(pubkey=destination, is_signer=False, is_writable=True),
             AM(pubkey=payer, is_signer=True, is_writable=False),
             AM(pubkey=token_prog, is_signer=False, is_writable=False),

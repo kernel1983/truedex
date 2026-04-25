@@ -19,13 +19,29 @@ WS_URL = "ws://localhost:8900"
 
 print(f"--- Indexer Active: Monitoring {PROGRAM_ID} ---")
 
-def parse_instruction(data: bytes) -> dict:
+def parse_instruction(data: bytes, accounts: list) -> dict:
     if not data: return {"error": "no data"}
     opcode = data[0]
     result = {"opcode": opcode}
-    if opcode == 0: result["name"] = "initialize_vault"
-    elif opcode == 1: result["name"] = "lock"
-    elif opcode == 2: result["name"] = "release"
+    
+    # 尝试提取金额 (u64, 8 bytes)
+    amount = None
+    if len(data) >= 9:
+        amount = struct.unpack("<Q", data[1:9])[0]
+        result["amount"] = amount
+
+    if opcode == 0: 
+        result["name"] = "initialize_vault"
+    elif opcode == 1: 
+        result["name"] = "lock"
+        # lock(accounts): [source_ata, vault_ata, user_payer, token_program]
+        if len(accounts) >= 3:
+            result["sender"] = accounts[2]
+    elif opcode == 2: 
+        result["name"] = "release"
+        # release(accounts): [vault_state, vault_ata, dest_ata, operator, token_program]
+        if len(accounts) >= 4:
+            result["sender"] = accounts[3]
     elif opcode == 3:
         result["name"] = "calldata"
         payload = data[1:]
@@ -39,7 +55,6 @@ class Indexer:
         print("Connected to RPC. Waiting for events...")
 
     def process_transaction(self, signature_str):
-        # 使用 jsonParsed 获取事务，并强制转为字典
         sig = Signature.from_string(signature_str)
         resp = self.client.get_transaction(sig, encoding="jsonParsed", commitment=Confirmed)
         
@@ -47,41 +62,50 @@ class Indexer:
             print(f"  ❌ Failed to fetch transaction details for {signature_str}")
             return
 
-        # 将对象序列化再反序列化，得到纯字典，绕过 solders 类的属性访问限制
         txn_dict = json.loads(resp.value.to_json())
+        meta = txn_dict.get('meta', {})
         
-        # 提取所有指令
+        # 提取账户列表，用于匹配 Mint
+        account_keys = txn_dict.get('transaction', {}).get('message', {}).get('accountKeys', [])
+        pubkeys_list = [a.get('pubkey') if isinstance(a, dict) else a for a in account_keys]
+
         all_ixs = []
-        
-        # 1. 提取外层指令
         msg = txn_dict.get('transaction', {}).get('message', {})
         all_ixs.extend(msg.get('instructions', []))
         
-        # 2. 提取内层指令 (CPI)
-        meta = txn_dict.get('meta', {})
         inner_groups = meta.get('innerInstructions', [])
         for group in inner_groups:
             all_ixs.extend(group.get('instructions', []))
 
-        print(f"  Scanning {len(all_ixs)} instructions...")
-
         for ix in all_ixs:
-            # 在 jsonParsed 模式下，自定义程序通常在 'programId' 字段
             p_id = ix.get('programId')
             if p_id == self.prog:
-                # 数据在 'data' 字段，通常是 Base58 编码的字符串
                 raw_data = ix.get('data')
+                ix_accounts = ix.get('accounts', [])
                 if raw_data:
-                    print(f"  🎯 Match! Parsing data: {raw_data[:20]}...")
                     try:
                         data_bytes = base58.b58decode(raw_data)
-                        parsed = parse_instruction(data_bytes)
+                        parsed = parse_instruction(data_bytes, ix_accounts)
+                        
+                        # 尝试从 Token Balances 中匹配 Mint
+                        mint = None
+                        token_balances = meta.get('postTokenBalances', [])
+                        involved_set = set(ix_accounts)
+                        for balance in token_balances:
+                            idx = balance.get('accountIndex')
+                            if idx is not None and idx < len(pubkeys_list):
+                                if pubkeys_list[idx] in involved_set:
+                                    mint = balance.get('mint')
+                                    break
+                        
+                        if mint:
+                            parsed["mint"] = mint
+                            
                         print(f"  ✨ SUCCESS: {parsed}")
                         return parsed
                     except Exception as e:
                         print(f"  Decode Error: {e}")
         
-        print("  ⚠️ Target program invoked, but no data-carrying instructions found.")
         return None
 
     async def run(self):
@@ -92,19 +116,17 @@ class Indexer:
                 RpcTransactionLogsFilterMentions(Pubkey.from_string(self.prog)), 
                 commitment=Confirmed
             )
-            print("✅ Subscribed! Run calldata.py now.")
+            print("✅ Subscribed! Monitoring activity...")
             
             async for msg in ws_client:
                 msg_str = str(msg)
-                # 从日志中提取签名
                 sigs = re.findall(r'signature: "([a-zA-Z0-9]{32,})"', msg_str)
                 if not sigs: sigs = re.findall(r'signature=([a-zA-Z0-9]{32,})', msg_str)
                 
                 if sigs:
                     for s in set(sigs):
                         print(f"\n🔔 Event Detected: {s}")
-                        # 稍微等一下让 RPC 准备好
-                        await asyncio.sleep(1.2)
+                        await asyncio.sleep(1.0) # 等待 RPC 同步
                         self.process_transaction(s)
 
 if __name__ == "__main__":

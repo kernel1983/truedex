@@ -37,7 +37,7 @@ def main():
     msg = Message.new_with_blockhash([init_ix], payer, blockhash)
     txn = Transaction([kp], msg, blockhash)
     result = client.send_transaction(txn)
-    print(f"Initialized vault PDA: {vault_pda}")
+    print(f"Initialized vault (PDA): {vault_pda}")
     print(f"Signature: {result.value}")
 
 if __name__ == "__main__":
