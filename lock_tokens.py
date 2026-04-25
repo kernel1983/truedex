@@ -10,8 +10,7 @@ from solders.instruction import Instruction, AccountMeta as AM
 from solders.system_program import create_account, assign, AssignParams
 from spl.token.constants import TOKEN_PROGRAM_ID
 import struct
-
-PROG = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
+from setting import PROGRAM_ID as PROG
 
 def main():
     if len(sys.argv) != 4:

@@ -8,8 +8,7 @@ from solders.message import Message
 from solders.transaction import Transaction
 from solders.instruction import Instruction, AccountMeta as AM
 from solders.system_program import create_account, assign, AssignParams
-
-PROG = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
+from setting import PROGRAM_ID as PROG
 
 def main():
     client = Client("http://localhost:8899")

@@ -12,8 +12,8 @@ from solana.rpc.commitment import Confirmed
 from solana.rpc import websocket_api as ws
 from solders.pubkey import Pubkey
 from solders.signature import Signature
+from setting import PROGRAM_ID
 
-PROGRAM_ID = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
 RPC_URL = "http://localhost:8899"
 WS_URL = "ws://localhost:8900"
 
@@ -81,6 +81,7 @@ class Indexer:
             p_id = ix.get('programId')
             if p_id == self.prog:
                 raw_data = ix.get('data')
+                print(raw_data)
                 ix_accounts = ix.get('accounts', [])
                 if raw_data:
                     try:

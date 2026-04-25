@@ -8,8 +8,7 @@ from solders.message import Message
 from solders.transaction import Transaction
 from solders.instruction import Instruction, AccountMeta as AM
 import base64
-
-PROG = "8ZTKLtRRoji4AwAmYwguNkC1VgJszD1rdASZhxSbRLXA"
+from setting import PROGRAM_ID as PROG
 
 def main():
     if len(sys.argv) != 2:
