@@ -1,0 +1,176 @@
+.header {
+  background-color: rgba(169, 195, 219, 0.1);
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+}
+
+.header .menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+
+.header .menu li {
+  margin-right: 20px;
+}
+
+@media (max-width: 600px) {
+  .header .menu {
+    display: none;
+  }
+  .header .menu ul {
+    flex-direction: column;
+    position: absolute;
+    top: 45px;
+    left: 0;
+    width: 100%;
+    background-color: #000;
+    z-index: 1000;
+  }
+  .header .menu li {
+    margin-right: 0;
+  }
+  .header .menu li a {
+    display: block;
+    padding: 10px 0;
+    text-align: center;
+  }
+}
+
+.header .login button {
+  border-radius: 12px;
+  padding: 5px 15px;
+}
+
+
+.market-panel {
+  background-color: rgba(17, 24, 39, 0.7) !important;
+}
+
+.market-panel button.active {
+  color: #fff;
+}
+
+.chart-panel {
+  background-color: rgba(231, 231, 231, 0.1);
+}
+
+.order-panel {
+  padding-top: 10px;
+  background-color: rgba(231, 231, 231, 0.1);
+}
+
+.order-panel button.active {
+  color: #fff;
+}
+
+.order-panel .tab-control button {
+  border-bottom: white solid 1px;
+  margin: auto 2px;
+  padding: auto 12px;
+}
+
+.order-panel .switch-control {
+  display: flex;
+  background: #374151;
+  border-radius: 9999px;
+  justify-content: center;
+  margin: 5px 80px 5px 80px;
+  padding: 2px;
+}
+
+.order-panel .switch-control button {
+  border-radius: 9999px;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  color: #9CA3AF;
+  transition: all 0.3s ease;
+}
+
+.order-panel .switch-control button.active {
+  background: #4B5563;
+  color: white;
+}
+
+.order-panel .price label,.order-panel .size label {
+  width: 50px;
+  display: inline-block;
+}
+
+.order-panel .price,.order-panel .size {
+  border-radius: 5px;
+  border: 1px solid white;
+  margin: 5px;
+  padding: 3px;
+}
+
+.order-panel input[type=text] {
+  background-color: transparent;
+  width: 100%;
+  outline: none;
+}
+
+.order-panel .range {
+  border-radius: 5px;
+  /* border: 1px solid white; */
+  margin: 3px;
+  padding: 3px;
+  display: flex;
+}
+
+.order-panel .range input[type=range]{
+  width: 220px;
+  display: inline-block;
+  margin-right: 10px;
+}
+
+.order-panel .range .percent {
+  width: 90px;
+  border-radius: 5px;
+  border: 1px solid white;
+  padding: 3px 0 0 8px;
+}
+
+.order-panel .range .percent input {
+  width: 50px;
+}
+
+.order-panel .order {
+  padding: 3px;
+  position: absolute;
+  top: 460px;
+}
+
+.order-panel .order button {
+  border-radius: 5px;
+  margin: 3px;
+  width:290px;
+  background-color: aqua;
+}
+
+.tool-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #000;
+}
+
+body {
+    background-color: #000;
+}
+
+#starry-sky {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    display: block;
+}

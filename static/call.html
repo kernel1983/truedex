@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentra Local Playground</title>
+    <!--script src="https://cdn.tailwindcss.com"></script-->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+</head>
+
+<body class="bg-white">
+    <header class="bg-black bg-opacity-75 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="pixel-logo">
+            </div>
+
+            <nav class="hidden md:flex space-x-4">
+                <a href="https://zentra.dev" class="block px-4 py-2 text-orange-500 hover:text-orange-300">Zentra</a>
+                <a href="https://github.com/0xZentra/whitepaper"
+                    class="block px-4 py-2 text-orange-500 hover:text-orange-300">Theory</a>
+                <a href="https://zentra.gitbook.io/en"
+                    class="block px-4 py-2 text-orange-500 hover:text-orange-300">Docs</a>
+
+                <a href="https://mainnet.zentra.dev"
+                    class="block px-4 py-2 text-orange-500 hover:text-orange-600">Mainnet</a>
+                <a href="https://testnet3.zentra.dev"
+                    class="block px-4 py-2 text-orange-500 hover:text-orange-600">Testnet 3</a>
+
+                <a href="https://x.com/0xZentra"
+                    class="block px-4 py-2 text-orange-500 hover:text-orange-300">Twitter</a>
+                <a href="https://github.com/0xZentra"
+                    class="block px-4 py-2 text-orange-500 hover:text-orange-300">Github</a>
+
+            </nav>
+            <button id="mobile-menu-button" class="md:hidden">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+    </header>
+
+    <div id="walletConnect" style="display:none;"
+        class="relative min-h-[calc(100vh-64px)] flex items-center justify-center">
+        <div class="bg-white bg-opacity-75 p-10 rounded-lg shadow-lg max-w-4xl w-full text-center">
+            <br><br>
+            <!--div id="marquee-container" class="flex items-center justify-center">
+                <p id="marquee-text" class="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 transition-opacity duration-500 ease-in-out ">Welcome to Airdrop!</p>
+            </div-->
+            <div class="mb-4 mt-8">
+                <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+                    id="connectButton">Connect Wallet</button>
+            </div>
+        </div>
+    </div>
+    <div id="networkSwitchPanel" style="display:none;"
+        class="relative min-h-[calc(100vh-64px)] flex items-center justify-center">
+        <div class="bg-white bg-opacity-75 p-10 rounded-lg shadow-lg max-w-4xl w-full text-center">
+            <h2 class="text-2xl font-bold text-red-600 mb-4">Wrong Network</h2>
+            <p class="text-gray-800 mb-4">Zentra Wallet supports <strong>Base Sepolia</strong> (Chain ID: 84532).</p>
+            <p class="text-gray-800 mb-6">Please switch your wallet's network to continue.</p>
+            <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+                id="switchNetworkButton">Switch to Base Sepolia</button>
+        </div>
+    </div>
+
+    <section class="py-12">
+        <div class="container mx-auto px-4">
+            <div id="walletInfo" style="display: none;" class="max-w-md mx-auto">
+                <div
+                    class="p-6 rounded-lg shadow-md bg-white bg-opacity-90 text-gray-700 flex justify-between items-center mb-8">
+                    <div class="text-xs sm:text-sm md:text-base">
+                        <p><strong>Address:</strong><br><span id="userAddress"></span></p>
+                        <p><strong>Network:</strong><br><span id="networkName"></span></p>
+                        <!-- <p><strong>Gas:</strong><br><span id="gas"></span></p> -->
+                        <div id="balance-list"></div>
+                        <!-- <p><strong>USDC:</strong><br><span id="usdc"></span></p> -->
+                    </div>
+                </div>
+
+                <div id="bridge-panel" class="max-w-md mx-auto">
+                    <div class="p-6 rounded-lg shadow-md mt-8 bg-white bg-opacity-90">
+                        <h2 class="text-2xl font-bold text-center mb-6">Zentra Local Playground</h2>
+
+                        <!-- Custom JSON Tab Content -->
+                        <div id="content-custom" class="">
+                            <div class="mb-4">
+                                <label class="block text-gray-700 text-lg font-bold mb-2">Custom JSON Calldata</label>
+                                <textarea id="custom_json" rows="6"
+                                    class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline font-mono text-sm"
+                                    placeholder='{"p": "zen", "f": "token_transfer", "a": [...]}'>{"p": "zen", "f": "token_transfer", "a": []}</textarea>
+                            </div>
+
+                            <!-- Send Button -->
+                            <div class="text-center mb-4">
+                                <button
+                                    class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-8 rounded-lg text-lg w-full"
+                                    id="customJsonButton">Send Custom Call</button>
+                            </div>
+                        </div>
+
+                        <div id="transferResult" class="mt-4 text-center break-all"></div>
+                    </div>
+
+                </div>
+            </div>
+    </section>
+
+
+    <!-- <script src="{% static 'js/menu.js' %}"></script> -->
+    <script type="module" src="wallet.js"></script>
+</body>
+
+</html>
