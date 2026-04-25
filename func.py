@@ -50,7 +50,7 @@ namespace = {
     'put': space.put,
     'get': space.get, 
     'blocknumber': get_block_number,
-    'nextblock': space.nextblock,
+    # 'nextblock': space.nextblock,
     'setsender': set_sender,
     'states': space.states,
     'sender': space.sender,

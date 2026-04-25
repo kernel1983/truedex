@@ -1,14 +1,11 @@
-import threading
-import time
 import tornado.web
 import tornado.ioloop
 
 import space
-import rpc
 import func
 
 func.load_all_zips()
-GLOBAL_FUNCTIONS = func.namespace
+# GLOBAL_FUNCTIONS = func.namespace
 
 
 class GetLatestStateAPIHandler(tornado.web.RequestHandler):
@@ -121,29 +118,54 @@ class EventsAPIHandler(tornado.web.RequestHandler):
         self.finish({'result': []})
 
 
+class IndexerAPIHandler(tornado.web.RequestHandler):
+    def get(self):
+        txhash = self.get_argument('txhash')
+        self.finish({'result': []})
+
+    def post(self):
+        import tornado.escape
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+        except:
+            self.set_status(400)
+            self.finish({'error': 'Invalid JSON'})
+            return
+
+        print('IndexerAPIHandler received:', data)
+
+        try:
+            func.set_sender(data.get('from', ''))
+            func_name = data.get('f')
+            args = data.get('a', [])
+            if func_name in func.namespace:
+                result = func.namespace[func_name](*args)
+                self.finish({'result': result})
+            else:
+                self.set_status(400)
+                self.finish({'error': f'Function {func_name} not found'})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.set_status(500)
+            self.finish({'error': str(e)})
+
+
 def start_server():
     space._init_block_mode()
     app = tornado.web.Application([
         (r'/static/(.*)', tornado.web.StaticFileHandler, {'path': 'static/'}),
-        (r"/", rpc.RPCHandler),
+        (r"/", IndexerAPIHandler),
         (r'/api/get_latest_state', GetLatestStateAPIHandler),
         (r'/api/query_recent_state', QueryRecentStateAPIHandler),
         (r'/api/orderbook', OrderbookAPIHandler),
         (r'/api/history', HistoryAPIHandler),
         (r'/api/events', EventsAPIHandler),
-    ])
-    app.listen(8545)
+    ], debug=True)
+    app.listen(3000)
     tornado.ioloop.IOLoop.current().start()
 
 
 if __name__ == "__main__":
-    server_thread = threading.Thread(target=start_server)
-    server_thread.daemon = True
-    server_thread.start()
-    print("Server started on http://127.0.0.1:8545")
-    print("Press Ctrl+C to stop")
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nStopping...")
+    print('http://127.0.0.1:3000')
+    start_server()

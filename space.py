@@ -82,15 +82,15 @@ def event(_event, _args):
 def handle_lookup(_addr):
     return _addr
 
-def nextblock():
-    global states
-    global latest_block_number
-    global blocks, block_hashes
+# def nextblock():
+#     global states
+#     global latest_block_number
+#     global blocks, block_hashes
 
-    block_hash = _gen_block_hash()
-    # blocks[latest_block_number] = []
-    block_hashes[latest_block_number] = block_hash
+#     block_hash = _gen_block_hash()
+#     # blocks[latest_block_number] = []
+#     block_hashes[latest_block_number] = block_hash
 
-    latest_block_number += 1
-    states.append({})
+#     latest_block_number += 1
+#     states.append({})
 
