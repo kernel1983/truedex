@@ -1,5 +1,6 @@
 import tornado.web
 import tornado.ioloop
+import json
 
 import space
 import func
@@ -88,22 +89,23 @@ class HistoryAPIHandler(tornado.web.RequestHandler):
         
         start_block = int(self.get_argument('start_block', '0'))
         end_block = int(self.get_argument('end_block', str(space.latest_block_number)))
-        
+
         trades = []
-        for evt in space.events:
-            if evt['block'] < start_block or evt['block'] > end_block:
+        for block_num in sorted(space.events.keys()):
+            if block_num < start_block or block_num > end_block:
                 continue
-            if evt['event'] in ('TradeOrderTake', 'TradeOrderMake') and pair in evt['args']:
-                event_data = {
-                    'block': evt['block'],
-                    'event': evt['event'],
-                    'pair': evt['args'][0],
-                    'side': evt['args'][1],
-                    'address': evt['args'][2],
-                    'amount': str(evt['args'][3]),
-                    'price': str(evt['args'][4]),
-                }
-                trades.append(event_data)
+            for evt in space.events[block_num]:
+                if evt['event'] in ('TradeOrderTake', 'TradeOrderMake') and pair in evt['args']:
+                    event_data = {
+                        'block': block_num,
+                        'event': evt['event'],
+                        'pair': evt['args'][0],
+                        'side': evt['args'][1],
+                        'address': evt['args'][2],
+                        'amount': str(evt['args'][3]),
+                        'price': str(evt['args'][4]),
+                    }
+                    trades.append(event_data)
         
         self.finish({
             'trades': trades,
@@ -114,13 +116,25 @@ class HistoryAPIHandler(tornado.web.RequestHandler):
 
 class EventsAPIHandler(tornado.web.RequestHandler):
     def get(self):
-        txhash = self.get_argument('txhash')
-        self.finish({'result': []})
+        txhash = self.get_argument('txhash', None)
+        limit = int(self.get_argument('limit', '100'))
+
+        all_events = []
+        for block_num in sorted(space.events.keys()):
+            for evt in space.events[block_num]:
+                all_events.append({'block': block_num, **evt})
+
+        if txhash:
+            all_events = [e for e in all_events if e.get('txhash') == txhash]
+
+        all_events = all_events[-limit:]
+        self.finish({'events': all_events, 'total': len(all_events)})
 
 
 class IndexerAPIHandler(tornado.web.RequestHandler):
     def get(self):
         txhash = self.get_argument('txhash')
+        print(f"[IndexerAPIHandler] GET txhash={txhash}")
         self.finish({'result': []})
 
     def post(self):
@@ -132,14 +146,20 @@ class IndexerAPIHandler(tornado.web.RequestHandler):
             self.finish({'error': 'Invalid JSON'})
             return
 
-        print('IndexerAPIHandler received:', data)
+        print(f"[IndexerAPIHandler] POST: {data}")
 
         try:
-            func.set_sender(data.get('from', ''))
-            func_name = data.get('f')
-            args = data.get('a', [])
-            if func_name in func.namespace:
-                result = func.namespace[func_name](*args)
+            info = data.get('info', {})
+            args = data.get('args', [])
+            sender = info.get('sender', '')
+            func.set_sender(sender)
+            func_name = info.get('name')
+            if func_name and func_name in func.namespace:
+                call_args = {'p': 'zen', 'a': args, 'f': func_name}
+                print(f"[IndexerAPIHandler] calling {func_name} with info={info}, args={call_args}")
+                wrapped = func.namespace[func_name]
+                result = wrapped.f(info, call_args)
+                print(f"[IndexerAPIHandler] result: {result}")
                 self.finish({'result': result})
             else:
                 self.set_status(400)

@@ -6,7 +6,6 @@ import binascii
 import importlib.util
 import importlib.machinery
 
-import web3
 try:
     from eth_utils import keccak
 except ImportError:
@@ -40,11 +39,13 @@ def set_sender(sender):
     namespace['sender'] = space.sender
 
 
-accounts = []
-for i in range(10):
-    private_key = hashlib.sha256(('brownie%s' % i).encode('utf8')).digest()
-    account = web3.Account.from_key(private_key)
-    accounts.append(account.address.lower())
+# from solders.keypair import Keypair
+
+# accounts = []
+# for i in range(10):
+#     seed = hashlib.sha256(('brownie%s' % i).encode('utf8')).digest()
+#     account = Keypair.from_seed(seed)
+#     accounts.append(str(account.pubkey()).lower())
 
 namespace = {
     'put': space.put,
@@ -54,8 +55,8 @@ namespace = {
     'setsender': set_sender,
     'states': space.states,
     'sender': space.sender,
-    'accounts': accounts,
-    'a': accounts,
+    # 'accounts': accounts,
+    # 'a': accounts,
     '__name__': '__console__',
     '__doc__': None,
     'blocks': space.blocks,

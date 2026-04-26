@@ -1,68 +1,66 @@
+import time
 
-import sys
-import hashlib
-import json
-import requests
+from solana.rpc.api import Client
+from solders.keypair import Keypair
+from solders.pubkey import Pubkey as P
+from solders.message import Message
+from solders.transaction import Transaction
+from solders.instruction import Instruction, AccountMeta as AM
 
-import web3
+from setting import PROGRAM_ID
 
-import setting
-
-PROVIDER_HOST = 'http://127.0.0.1:8545'
-
-w3 = web3.Web3(web3.Web3.HTTPProvider(PROVIDER_HOST))
-
-ZEN_ADDR = '0x00000000000000000000000000000000007A656e'# hex of 'zen'
-
-
-def transaction(account, call):
-    nonce = w3.eth.get_transaction_count(account.address)
-    print(account.address, nonce)
-    transaction = {
-        'from': account.address,
-        'to': ZEN_ADDR,
-        'value': 0,
-        'nonce': w3.eth.get_transaction_count(account.address),
-        'data': call.encode('utf8'),
-        'gas': 210000,
-        'maxFeePerGas': 1000000000,
-        'maxPriorityFeePerGas': 0,
-        'chainId': setting.CHAIN_ID,
-        # 'chainId': 31337,
-    }
-
-    signed = w3.eth.account.sign_transaction(transaction, account.key)
-    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-    return tx_hash.hex()
+def transaction(call):
+    client = Client("http://localhost:8899")
+    kp = Keypair.from_json(open("/home/debian/.config/solana/id.json").read())
+    payer = kp.pubkey()
+    prog = P.from_string(PROGRAM_ID)
+    
+    print(f"{payer} executing call")
+    data = call.encode('utf8')
+    
+    calldata_ix = Instruction(
+        program_id=prog,
+        accounts=[
+            AM(pubkey=payer, is_signer=False, is_writable=True),
+            AM(pubkey=payer, is_signer=False, is_writable=True),
+            AM(pubkey=payer, is_signer=True, is_writable=False),
+        ],
+        data=bytes([3]) + data,
+    )
+    
+    blockhash = client.get_latest_blockhash().value.blockhash
+    msg = Message.new_with_blockhash([calldata_ix], payer, blockhash)
+    txn = Transaction([kp], msg, blockhash)
+    result = client.send_transaction(txn)
+    return str(result.value)
 
 def next_block():
-    resp = requests.post(PROVIDER_HOST, json={'jsonrpc': '2.0', 'method': 'zentra_nextBlock', 'id': 1})
-    return resp.json()
+    time.sleep(1)
+    return {"result": "slept 1s for solana block propagation"}
 
 
 if __name__ == '__main__':
     call = '{"p": "zen", "f": "asset_create", "a": ["USDC"]}'
     print(call)
-    tx_hash = transaction(setting.accounts[0], call)
+    tx_hash = transaction(call)
     print(tx_hash)
 
     call = '{"p": "zen", "f": "token_create", "a": ["USDC", "Mock USDC", 6]}'
     print(call)
-    tx_hash = transaction(setting.accounts[0], call)
+    tx_hash = transaction(call)
     print(tx_hash)
 
 
     call = '{"p": "zen", "f": "asset_create", "a": ["BTC"]}'
     print(call)
-    tx_hash = transaction(setting.accounts[0], call)
+    tx_hash = transaction(call)
     print(tx_hash)
 
     call = '{"p": "zen", "f": "token_create", "a": ["BTC", "Mock BTC", 18]}'
     print(call)
-    tx_hash = transaction(setting.accounts[0], call)
+    tx_hash = transaction(call)
     print(tx_hash)
 
-    # 手动推进 block
     print('=== 调用 next block ===')
     result = next_block()
     print('next block result:', result)
