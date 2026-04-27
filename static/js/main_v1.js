@@ -5,6 +5,9 @@ const LightweightCharts = window.LightweightCharts;
 // const TESTNET_INDEXER_URL = 'https://testnet3.zentra.dev';
 // const TESTNET_INDEXER_URL = 'http://127.0.0.1:8090';
 const TESTNET_INDEXER_URL = 'http://127.0.0.1:3000';
+const SOLANA_PROGRAM = '2AxT8e7Jq2vgoPNo8uT1Go3Huifdx5XWm4CntKz4aiih';
+const RPC_URL = 'http://127.0.0.1:8899';
+const SOLANA_CONNECTION = new Connection(RPC_URL);
 
 const parseJsonWithBigInt = (data_json) => JSON.parse(
   data_json,
@@ -256,13 +259,14 @@ class OrderPanel extends React.Component {
     const address = publicKey.toString();
 
     const tokens = ['USDC', 'BTC'];
+    const decimals = { USDC: 6, BTC: 18 };
     tokens.forEach(async (token) => {
       try {
-        const prefix = `${token}-balance:${address.toLowerCase()}`;
+        const prefix = `${token}-balance:${address}`;
         const response = await fetch(`${TESTNET_INDEXER_URL}/api/get_latest_state?prefix=${prefix}`);
         const data_json = await response.text();
         const data = parseJsonWithBigInt(data_json);
-        const formattedBalance = Number(data.result || 0) / 1e18;
+        const formattedBalance = Number(data.result || 0) / Math.pow(10, decimals[token]);
         this.setState(prevState => ({
           balance: {
             ...prevState.balance,
@@ -370,6 +374,8 @@ class OrderPanel extends React.Component {
       transaction.add(ix);
 
       try {
+        transaction.feePayer = publicKey;
+        transaction.recentBlockhash = (await SOLANA_CONNECTION.getLatestBlockhash()).blockhash;
         const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
         alert(`Transaction sent: ${signature}`);
       } catch (error) {
@@ -411,6 +417,8 @@ class OrderPanel extends React.Component {
       transaction.add(ix);
 
       try {
+        transaction.feePayer = publicKey;
+        transaction.recentBlockhash = (await SOLANA_CONNECTION.getLatestBlockhash()).blockhash;
         const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
         alert(`Transaction sent: ${signature}`);
       } catch (error) {
@@ -536,14 +544,14 @@ class AssetsPanel extends React.Component {
     if (!this.props.address) return;
     const tokens = { BTC: 18, USDC: 6 };
     const newState = {};
-    const addr = this.props.address.toString().toLowerCase();
+    const addr = this.props.address.toString();
     for (const [tick, dec] of Object.entries(tokens)) {
       try {
         const prefix = `${tick}-balance:${addr}`;
         const response = await fetch(`${TESTNET_INDEXER_URL}/api/get_latest_state?prefix=${prefix}`);
         const data = await response.json();
         const val = data.result;
-        newState[tick] = val && val !== '0' ? (Number(val) / 1e18).toString() : '0';
+        newState[tick] = val && val !== '0' ? (Number(val) / Math.pow(10, dec)).toString() : '0';
       } catch (e) {
         newState[tick] = '0';
       }

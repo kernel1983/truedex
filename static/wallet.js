@@ -50,7 +50,7 @@ async function fetch_decimal(token) {
 
 async function fetch_token(token, address) {
   try {
-    const prefix = `base-${token}-balance:${address.toLowerCase()}`;
+    const prefix = `base-${token}-balance:${address}`;
     const url = `${INDEXER_URL}/api/get_latest_state?prefix=${encodeURIComponent(prefix)}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

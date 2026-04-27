@@ -131,13 +131,13 @@ def token_transfer(info, args):
     assert args['f'] in functions
 
     receiver = args['a'][1]
-    assert len(receiver) <= 42
-    assert type(receiver) is str
-    if len(receiver) == 42:
-        assert receiver.startswith('0x')
-        assert set(receiver[2:]) <= set(string.digits+'abcdef')
-    else:
-        assert len(receiver) > 4
+    # assert len(receiver) <= 42
+    # assert type(receiver) is str
+    # if len(receiver) == 42:
+    #     assert receiver.startswith('0x')
+    #     assert set(receiver[2:]) <= set(string.digits+'abcdef')
+    # else:
+    #     assert len(receiver) > 4
 
     sender = info['sender']
     addr = handle_lookup(sender)
