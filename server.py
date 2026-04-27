@@ -154,8 +154,17 @@ class IndexerAPIHandler(tornado.web.RequestHandler):
             sender = info.get('sender', '')
             func.set_sender(sender)
             func_name = info.get('name')
+            slot = info.get('slot') or 0
+            if slot and slot > space.latest_block_number:
+                while space.latest_block_number < slot:
+                    space.nextblock()
+            elif slot and slot > 0:
+                space.nextblock()
+            else:
+                space.nextblock()
             if func_name and func_name in func.namespace:
                 call_args = {'p': 'zen', 'a': args, 'f': func_name}
+                call_args['f'] = func_name
                 print(f"[IndexerAPIHandler] calling {func_name} with info={info}, args={call_args}")
                 wrapped = func.namespace[func_name]
                 result = wrapped.f(info, call_args)

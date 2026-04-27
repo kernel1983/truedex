@@ -30,7 +30,7 @@ def _init_block_mode():
         interval_ms = block_mode * 1000
         block_timer = tornado.ioloop.PeriodicCallback(nextblock, interval_ms)
         block_timer.start()
-    # 初始化第一个 block
+    # Initialize first block
     # if latest_block_number == 0:
     #     block_hash = _gen_block_hash()
     #     blocks[latest_block_number] = []
@@ -73,24 +73,24 @@ def get(_asset, _var, _default = None, _key = None):
 
     return value, None
 
-def event(_event, _args):
+def event(_event, _args, _block=None):
     global states, latest_block_number
-    if latest_block_number not in events:
-        events[latest_block_number] = []
-    events[latest_block_number].append({'event': _event, 'args': _args})
+    block = _block if _block is not None else latest_block_number
+    if block not in events:
+        events[block] = []
+    events[block].append({'event': _event, 'args': _args})
 
 def handle_lookup(_addr):
     return _addr
 
-# def nextblock():
-#     global states
-#     global latest_block_number
-#     global blocks, block_hashes
+def nextblock():
+    global states, latest_block_number
+    global blocks, block_hashes
 
-#     block_hash = _gen_block_hash()
-#     # blocks[latest_block_number] = []
-#     block_hashes[latest_block_number] = block_hash
+    block_hash = _gen_block_hash()
+    blocks[latest_block_number] = []
+    block_hashes[latest_block_number] = block_hash
 
-#     latest_block_number += 1
-#     states.append({})
+    latest_block_number += 1
+    states.append({})
 

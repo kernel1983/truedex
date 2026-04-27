@@ -61,6 +61,6 @@ if __name__ == '__main__':
     tx_hash = transaction(call)
     print(tx_hash)
 
-    print('=== 调用 next block ===')
+    print('=== Call next block ===')
     result = next_block()
     print('next block result:', result)

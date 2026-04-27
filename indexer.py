@@ -24,7 +24,7 @@ def parse_instruction(data: bytes, accounts: list) -> dict:
     opcode = data[0]
     result = {"opcode": opcode}
     
-    # 尝试提取金额 (u64, 8 bytes)
+    # Extract amount (u64, 8 bytes)
     amount = None
     if len(data) >= 9:
         amount = struct.unpack("<Q", data[1:9])[0]
@@ -81,21 +81,21 @@ class Indexer:
             resp = self.client.get_transaction(
                 Signature.from_string(signature_str),
                 encoding="jsonParsed",
-                commitment=Confirmed
+                commitment=Confirmed,
             )
         except Exception as e:
             print(f"  ❌ Fetch error: {e}")
             return
 
-        if not resp.value:
+        if resp.value is None:
             print(f"  ❌ Transaction not found: {signature_str}")
             return
 
+        slot = resp.value.slot
+        block_time = resp.value.block_time
+
         txn_dict = json.loads(resp.value.to_json())
         meta = txn_dict.get('meta', {})
-        block_time = meta.get('blockTime')
-        slot = meta.get('slot')
-
         account_keys = txn_dict.get('transaction', {}).get('message', {}).get('accountKeys', [])
         pubkeys_list = [a.get('pubkey') if isinstance(a, dict) else a for a in account_keys]
         signers = [a.get('pubkey') for a in account_keys if (a.get('signer') if isinstance(a, dict) else False)]
