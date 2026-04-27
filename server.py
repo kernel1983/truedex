@@ -1,6 +1,8 @@
+import json
+from urllib.parse import unquote
+
 import tornado.web
 import tornado.ioloop
-import json
 
 import space
 import func
@@ -11,7 +13,6 @@ func.load_all_zips()
 
 class GetLatestStateAPIHandler(tornado.web.RequestHandler):
     def get(self):
-        from urllib.parse import unquote
         prefix = unquote(self.get_argument('prefix'))
         if '-' not in prefix:
             self.finish({'result': None})
@@ -181,7 +182,6 @@ class IndexerAPIHandler(tornado.web.RequestHandler):
 
 
 def start_server():
-    space._init_block_mode()
     app = tornado.web.Application([
         (r'/static/(.*)', tornado.web.StaticFileHandler, {'path': 'static/'}),
         (r"/", IndexerAPIHandler),

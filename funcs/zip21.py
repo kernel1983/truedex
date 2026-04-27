@@ -17,7 +17,7 @@ def bridge_incoming(info, args):
     amount = int(args['a'][1])
     assert amount > 0
 
-    receiver = args['a'][2].lower()
+    receiver = args['a'][2]
     assert len(receiver) <= 42
     assert type(receiver) is str
     if len(receiver) == 42:
@@ -28,7 +28,7 @@ def bridge_incoming(info, args):
 
     chain = args['a'][3].lower()
     assert chain in ['base']
-    tx_hash = args['a'][4].lower().replace('0x', '')
+    tx_hash = args['a'][4].replace('0x', '')
     assert len(tx_hash) == 64
 
     balance, _ = get(tick, 'balance', 0, receiver)
@@ -100,7 +100,7 @@ def bridge_set_operator(info, args):
     # print('bridge_set_operator', asset_owner, addr)
     assert sender == asset_owner, "Only the asset owner can perform this operation"
 
-    operator = args['a'][1].lower()
+    operator = args['a'][1]
     assert type(operator) is str
     # assert len(operator) == 42
     assert operator.startswith('0x')

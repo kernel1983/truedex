@@ -130,7 +130,7 @@ def token_transfer(info, args):
     functions, _ = get('asset', 'functions', [], tick)
     assert args['f'] in functions
 
-    receiver = args['a'][1].lower()
+    receiver = args['a'][1]
     assert len(receiver) <= 42
     assert type(receiver) is str
     if len(receiver) == 42:
@@ -169,7 +169,7 @@ def token_send(info, args):
     sender = info['sender']
     addr = handle_lookup(sender)
 
-    spender = args['a'][1].lower()  # the address allowed to spend
+    spender = args['a'][1]  # the address allowed to spend
     assert len(spender) <= 42
     assert type(spender) is str
     if len(spender) == 42:
@@ -196,7 +196,7 @@ def token_accept(info, args):
     functions, _ = get('asset', 'functions', [], tick)
     assert args['f'] in functions
 
-    from_addr = args['a'][1].lower()  # the address from which tokens are withdrawn
+    from_addr = args['a'][1]  # the address from which tokens are withdrawn
     assert len(from_addr) <= 42
     assert type(from_addr) is str
     if len(from_addr) == 42:

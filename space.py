@@ -11,30 +11,10 @@ nonces = {}  # addr -> nonce
 
 sender = None
 
-block_mode = 0  # 0: manual, 1: auto after tx, >=2: auto with interval (seconds)
-block_timer = None
-
 
 def _gen_block_hash():
     return ''.join(random.choices(string.hexdigits.lower(), k=64))
 
-def _init_block_mode():
-    global block_mode, block_timer
-    import setting
-    import tornado.ioloop
-    block_mode = setting.BLOCK_MODE
-    if block_timer is not None:
-        block_timer.stop()
-        block_timer = None
-    if block_mode >= 2:
-        interval_ms = block_mode * 1000
-        block_timer = tornado.ioloop.PeriodicCallback(nextblock, interval_ms)
-        block_timer.start()
-    # Initialize first block
-    # if latest_block_number == 0:
-    #     block_hash = _gen_block_hash()
-    #     blocks[latest_block_number] = []
-    #     block_hashes[latest_block_number] = block_hash
 
 def put(_owner, _asset, _var, _value, _key = None):
     global sender
@@ -47,7 +27,7 @@ def put(_owner, _asset, _var, _value, _key = None):
         var = _var
 
     asset_name = _asset
-    addr = _owner.lower()
+    addr = _owner
     k = '%s-%s' % (asset_name, var)
     state = states[-1]
     state[k] = addr, _value
