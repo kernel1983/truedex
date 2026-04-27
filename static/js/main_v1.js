@@ -16,6 +16,20 @@ const parseJsonWithBigInt = (data_json) => JSON.parse(
   )
 );
 
+const getAllWallets = () => window.solana || window.backpack || null;
+
+const logWallets = () => {
+  console.log('window.solana:', window.solana);
+  console.log('window.backpack:', window.backpack);
+  console.log('getAllWallets():', getAllWallets());
+};
+window.addEventListener('load', logWallets);
+setTimeout(logWallets, 1000);
+
+function getWallet() {
+  return getAllWallets();
+}
+
 const toBigInt = (value) => {
   if (typeof value === 'bigint') return value;
   if (typeof value === 'string') return BigInt(value);
@@ -239,6 +253,21 @@ class OrderPanel extends React.Component {
   componentDidMount() {
     this.fetchBalances();
     this.balanceInterval = setInterval(this.fetchBalances, 2000);
+    // Auto-detect wallet
+    const wallet = getAllWallets();
+    console.log('Wallet found:', wallet);
+    setTimeout(() => {
+      const w = getAllWallets();
+      console.log('Wallet after timeout:', w, 'publicKey:', w ? w.publicKey : null);
+      if (w && w.publicKey) {
+        this.setState({
+          solAddress: w.publicKey.toString(),
+          publicKey: w.publicKey,
+          sendTransaction: w.signTransaction,
+          walletLoading: false
+        });
+      }
+    }, 500);
   }
 
   componentWillUnmount() {
@@ -319,8 +348,24 @@ class OrderPanel extends React.Component {
   }
 
   placeOrder = async () => {
-    const { publicKey, sendTransaction } = this.props;
+    // Check both props and direct wallet
+    const directWallet = getAllWallets();
+    console.log('Direct wallet check:', directWallet);
+    console.log('Props:', this.props);
+    
+    let publicKey = this.props.publicKey;
+    let sendTransaction = this.props.sendTransaction;
+    
+    if (directWallet && directWallet.publicKey) {
+      publicKey = directWallet.publicKey;
+      if (!sendTransaction && directWallet.signTransaction) {
+        sendTransaction = directWallet.signTransaction.bind(directWallet);
+      }
+      console.log('Using direct wallet:', publicKey.toString());
+    }
+    
     if (!publicKey || !sendTransaction) {
+      console.error('No wallet! publicKey:', publicKey, 'sendTransaction:', sendTransaction);
       alert('Please connect your wallet first.');
       return;
     }
@@ -377,7 +422,7 @@ class OrderPanel extends React.Component {
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = (await SOLANA_CONNECTION.getLatestBlockhash()).blockhash;
         const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
-        alert(`Transaction sent: ${signature}`);
+        console.log('Transaction sent:', signature);
       } catch (error) {
         console.error('Order failed:', error);
         alert('Order failed.');
@@ -420,7 +465,7 @@ class OrderPanel extends React.Component {
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = (await SOLANA_CONNECTION.getLatestBlockhash()).blockhash;
         const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
-        alert(`Transaction sent: ${signature}`);
+        console.log('Transaction sent:', signature);
       } catch (error) {
         console.error('Order failed:', error);
         alert('Order failed.');
@@ -607,14 +652,6 @@ class ToolPanel extends React.Component {
   }
 }
 
-async function getWallet() {
-  if (typeof window.solana === 'undefined') {
-    return null;
-  }
-  const resp = await window.solana.connect();
-  return resp;
-}
-
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -622,7 +659,7 @@ class App extends React.Component {
       screenWidth: window.innerWidth,
       solAddress: null,
       publicKey: null,
-      walletLoading: true,
+      walletLoading: false,
       sendTransaction: null,
       orderbook: null,
       lastBlock: null,
@@ -649,152 +686,76 @@ class App extends React.Component {
     }
   }
 
-  initializeWallet = async () => {
-    if (typeof window.solana === 'undefined') {
-      this.setState({ walletLoading: false });
-      return;
-    }
-
-    try {
-      await window.solana.connect({ onlyIfTrusted: true });
-      const publicKey = window.solana.publicKey;
-      if (publicKey) {
-        this.setState({
-          solAddress: publicKey.toString(),
-          publicKey: publicKey,
-          sendTransaction: window.solana.signTransaction,
-          walletLoading: false
-        });
-      } else {
-        this.setState({ walletLoading: false });
-      }
-    } catch (error) {
-      console.error('Error initializing wallet:', error);
-      this.setState({ walletLoading: false });
-    }
+initializeWallet = async () => {
+  const wallet = getAllWallets();
+  console.log('initializeWallet called, wallet:', wallet, 'type:', wallet ? wallet.constructor.name : null);
+  if (!wallet) {
+    this.setState({ walletLoading: false });
+    return;
   }
 
-  handleWalletLogin = async () => {
-    if (typeof window.solana === 'undefined') {
-      alert('Solana wallet not installed!');
-      return;
+  try {
+    // Try different connect methods for different wallets
+    let publicKey = null;
+    if (wallet.isConnected && wallet.publicKey) {
+      publicKey = wallet.publicKey;
+    } else if (wallet.connect) {
+      await wallet.connect();
+      publicKey = wallet.publicKey;
     }
-
-    try {
-      const resp = await window.solana.connect();
-      const publicKey = resp.publicKey;
+    
+    if (publicKey) {
       this.setState({
         solAddress: publicKey.toString(),
         publicKey: publicKey,
-        sendTransaction: window.solana.signTransaction,
+        sendTransaction: wallet.signTransaction,
         walletLoading: false
       });
-    } catch (error) {
-      console.error('Error logging in:', error);
+    } else {
       this.setState({ walletLoading: false });
     }
+  } catch (error) {
+    console.error('Error initializing wallet:', error);
+    this.setState({ walletLoading: false });
+  }
+}
+
+handleWalletLogin = async () => {
+  const wallet = getAllWallets();
+  console.log('handleWalletLogin called, wallet:', wallet);
+  if (!wallet) {
+    alert('Solana wallet not installed!');
+    return;
   }
 
-  componentDidMount() {
-    window.addEventListener('resize', this.handleResize);
-    this.initializeWallet();
-    this.loadInitialMarketData();
-
-    this.orderbookInterval = setInterval(() => {
-      this.loadInitialMarketData();
-    }, 3000);
-
-    if (window.solana) {
-      window.solana.on('connect', () => {
-        this.setState({
-          solAddress: window.solana.publicKey.toString(),
-          publicKey: window.solana.publicKey,
-          sendTransaction: window.solana.signTransaction,
-          walletLoading: false
-        });
+  try {
+    let publicKey = null;
+    if (wallet.isConnected && wallet.publicKey) {
+      publicKey = wallet.publicKey;
+    } else if (wallet.connect) {
+      await wallet.connect();
+      publicKey = wallet.publicKey;
+    }
+    
+    if (publicKey) {
+      this.setState({
+        solAddress: publicKey.toString(),
+        publicKey: publicKey,
+        sendTransaction: wallet.signTransaction,
+        walletLoading: false
       });
-      window.solana.on('disconnect', () => {
-        this.setState({ solAddress: null, publicKey: null, sendTransaction: null });
-      });
     }
+  } catch (error) {
+    console.error('Error logging in:', error);
   }
+}
 
-  componentWillUnmount() {
-    window.removeEventListener('resize', this.handleResize);
-    this.teardownStream();
-    if (this.orderbookInterval) {
-      clearInterval(this.orderbookInterval);
-    }
-  }
+startStream = () => {
+  if (this.ws) return;
+  // ...
+}
 
-  handleResize = () => {
-    this.setState({
-      screenWidth: window.innerWidth
-    });
-  }
-
-  handleIntervalChange = () => {
-    this.loadInitialMarketData();
-  }
-
-  startStream = () => {
-    if (this.ws) return;
-    const lastBlockHeight = this.state.lastBlock ? this.state.lastBlock.height : null;
-    if (lastBlockHeight === null || lastBlockHeight === undefined) return;
-    const wsUrl = `${TESTNET_INDEXER_URL.replace(/^http/, 'ws')}/api/stream?base=BTC&quote=USDC` +
-      (lastBlockHeight ? `&start_block=${lastBlockHeight}` : '');
-
-    try {
-      this.ws = new WebSocket(wsUrl);
-    } catch (err) {
-      console.error('Failed to open websocket:', err);
-      return;
-    }
-
-    this.ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        this.handleStreamMessage(payload);
-      } catch (err) {
-        console.error('Failed to parse stream message:', err);
-      }
-    };
-
-    this.ws.onerror = (err) => {
-      console.error('Websocket error:', err);
-    };
-
-    this.ws.onclose = () => {
-      this.scheduleReconnect();
-    };
-  }
-
-  teardownStream = () => {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    if (!this.ws) return;
-    this.ws.onopen = null;
-    this.ws.onclose = null;
-    this.ws.onmessage = null;
-    this.ws.onerror = null;
-    try {
-      this.ws.close();
-    } catch (_) { }
-    this.ws = null;
-  }
-
-  scheduleReconnect = () => {
-    if (this.reconnectTimeout) return;
-    this.reconnectTimeout = setTimeout(() => {
-      this.reconnectTimeout = null;
-      this.teardownStream();
-      this.startStream();
-    }, 2000);
-  }
-
-  handleStreamMessage = (payload) => {
+handleStreamOpen = () => {
     if (!payload) return;
 
     if (payload.type === 'orderbook' || payload.orderbook || payload.bids || payload.asks || payload.buys || payload.sells) {
