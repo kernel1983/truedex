@@ -29,8 +29,7 @@ print(f"--- Network: {'devnet' if USE_DEVNET else 'local test'} ---")
 
 def parse_instruction(data: bytes, accounts: list) -> dict:
     if not data: return {"error": "no data"}
-    opcode = data[0]
-    result = {"opcode": opcode}
+    result = {}
     
     # Extract amount (u64, 8 bytes)
     amount = None
@@ -38,19 +37,8 @@ def parse_instruction(data: bytes, accounts: list) -> dict:
         amount = struct.unpack("<Q", data[1:9])[0]
         result["amount"] = amount
 
-    if opcode == 0: 
-        result["name"] = "initialize_vault"
-    elif opcode == 1: 
-        result["name"] = "lock"
-        # lock(accounts): [source_ata, vault_ata, user_payer, token_program]
-        if len(accounts) >= 3:
-            result["sender"] = accounts[2]
-    elif opcode == 2: 
-        result["name"] = "release"
-        # release(accounts): [vault_state, vault_ata, dest_ata, operator, token_program]
-        if len(accounts) >= 4:
-            result["sender"] = accounts[3]
-    elif opcode == 3:
+    # Assume opcode 3 = calldata
+    if len(data) > 0 and data[0] == 3:
         result["name"] = "calldata"
         payload = data[1:]
         result["text"] = payload.decode('utf-8', errors='replace')
@@ -180,7 +168,6 @@ class Indexer:
                             payload = {
                                 "info": {
                                     "name": call.get("f"),
-                                    "opcode": result.get("opcode"),
                                     "block_time": result.get("block_time"),
                                     "slot": result.get("slot"),
                                     "sender": result.get("sender"),
