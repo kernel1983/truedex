@@ -34,10 +34,6 @@ def transaction(call):
     result = client.send_transaction(txn)
     return str(result.value)
 
-def next_block():
-    time.sleep(1)
-    return {"result": "slept 1s for solana block propagation"}
-
 
 if __name__ == '__main__':
     call = '{"p": "zen", "f": "asset_create", "a": ["USDC"]}'
@@ -60,7 +56,3 @@ if __name__ == '__main__':
     print(call)
     tx_hash = transaction(call)
     print(tx_hash)
-
-    print('=== Call next block ===')
-    result = next_block()
-    print('next block result:', result)

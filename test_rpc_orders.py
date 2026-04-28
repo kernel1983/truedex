@@ -4,7 +4,7 @@ import json
 import random
 
 import setting
-from test_rpc_init import transaction, next_block
+from test_rpc_init import transaction
 
 if __name__ == '__main__':
     accounts = setting.accounts
@@ -19,8 +19,6 @@ if __name__ == '__main__':
         tx_hash = transaction(call)
         print(f'  tx: {tx_hash}')
 
-    print('\n=== next block ===')
-    next_block()
 
     print('=== Create BUY limit orders ===')
     for i in range(3):
@@ -32,18 +30,12 @@ if __name__ == '__main__':
         tx_hash = transaction(call)
         print(f'  tx: {tx_hash}')
 
-    print('\n=== next block ===')
-    next_block()
-
     print('=== Market SELL ===')
     amount = 0.1 * 10**18
     call = f'{{"p": "zen", "f": "trade_market_order", "a": ["BTC", -{amount}, "USDC", null]}}'
     print(f'Market SELL: amount={amount // 10**18}')
     tx_hash = transaction(call)
     print(f'  tx: {tx_hash}')
-
-    print('\n=== next block ===')
-    next_block()
 
     print('=== Market BUY ===')
     amount = 100 * 10**6
@@ -52,7 +44,5 @@ if __name__ == '__main__':
     tx_hash = transaction(call)
     print(f'  tx: {tx_hash}')
 
-    print('\n=== next block ===')
-    next_block()
 
     print('\n=== Done ===')
