@@ -228,7 +228,8 @@ def trade_market_order(info, args):
     trade_sell_start, _ = get('trade', f'{pair}_sell_start', 1)
     trade_buy_start, _ = get('trade', f'{pair}_buy_start', 1)
 
-    take_amount = 0
+    take_base = 0
+    take_quote = 0
     if quote_value is None and int(base_value) < 0:
         buy_or_sell = 'sell'
         base_value = int(args['a'][1])
@@ -248,7 +249,8 @@ def trade_market_order(info, args):
                 break
             buy[1] -= dx_base
             buy[2] += dx_quote
-            take_amount += dx_quote
+            take_base += dx_base
+            take_quote += dx_quote
 
             if base_balance - dx_base < 0:
                 break
@@ -308,7 +310,8 @@ def trade_market_order(info, args):
                 break
             sell[1] += dx_base
             sell[2] -= dx_quote
-            take_amount += dx_base
+            take_base += dx_base
+            take_quote += dx_quote
 
             if quote_balance - dx_quote < 0:
                 break
@@ -368,7 +371,8 @@ def trade_market_order(info, args):
                 break
             sell[1] += dx_base
             sell[2] -= dx_quote
-            take_amount += dx_base
+            take_base += dx_base
+            take_quote += dx_quote
 
             if quote_balance - dx_quote < 0:
                 break
@@ -428,7 +432,8 @@ def trade_market_order(info, args):
                 break
             buy[1] -= dx_base
             buy[2] += dx_quote
-            take_amount += dx_quote
+            take_base += dx_base
+            take_quote += dx_quote
 
             if base_balance - dx_base < 0:
                 break
@@ -469,11 +474,9 @@ def trade_market_order(info, args):
         assert balance >= 0
         put(addr, base_tick, 'balance', balance, addr)
 
-    price = 0
-    if total_buy_base > 0:
-        price = total_buy_quote * K // total_buy_base
-    if take_amount > 0:
-        event('TradeOrderTake', [pair, buy_or_sell, addr, take_amount, price])
+    if take_base > 0:
+        price = take_quote * K // take_base
+        event('TradeOrderTake', [pair, buy_or_sell, addr, take_base, price])
 
 
 def trade_limit_order_cancel(info, args):
