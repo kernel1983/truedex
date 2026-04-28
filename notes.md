@@ -15,6 +15,7 @@ cargo build-sbf
 ### Deploy to devnet/localnet
 ```bash
 solana program deploy target/deploy/token_locker.so --url localhost
+solana program deploy target/deploy/token_locker.so --url devnet
 ```
 
 ### Deploy to mainnet

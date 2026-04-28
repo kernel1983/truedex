@@ -11,13 +11,21 @@ from solana.rpc.commitment import Confirmed
 from solana.rpc import websocket_api as ws
 from solders.pubkey import Pubkey
 from solders.signature import Signature
-from setting import PROGRAM_ID
+from setting import PROGRAM_ID, RPC_URL, WS_URL, USE_DEVNET, DEVNET_PROGRAM_ID, DEVNET_RPC_URL, DEVNET_WS_URL
 
-RPC_URL = "http://localhost:8899"
-WS_URL = "ws://localhost:8900"
 SERVER_URL = "http://localhost:3000"
 
-print(f"--- Indexer Active: Monitoring {PROGRAM_ID} ---")
+if USE_DEVNET:
+    ACTIVE_RPC_URL = DEVNET_RPC_URL
+    ACTIVE_WS_URL = DEVNET_WS_URL
+    ACTIVE_PROGRAM_ID = DEVNET_PROGRAM_ID
+else:
+    ACTIVE_RPC_URL = RPC_URL
+    ACTIVE_WS_URL = WS_URL
+    ACTIVE_PROGRAM_ID = PROGRAM_ID
+
+print(f"--- Indexer Active: Monitoring {ACTIVE_PROGRAM_ID} ---")
+print(f"--- Network: {'devnet' if USE_DEVNET else 'local test'} ---")
 
 def parse_instruction(data: bytes, accounts: list) -> dict:
     if not data: return {"error": "no data"}
@@ -50,11 +58,11 @@ def parse_instruction(data: bytes, accounts: list) -> dict:
 
 class Indexer:
     def __init__(self):
-        self.client = Client(RPC_URL)
-        self.prog = PROGRAM_ID
+        self.client = Client(ACTIVE_RPC_URL)
+        self.prog = ACTIVE_PROGRAM_ID
         self.processed_signatures = set()
         self.http_session = None
-        print("Connected to RPC. Waiting for events...")
+        print(f"Connected to {ACTIVE_RPC_URL}. Waiting for events...")
 
     async def send_to_server(self, data):
         if not self.http_session:
@@ -106,7 +114,10 @@ class Indexer:
         )
 
         for ix in all_ixs:
-            if ix.get('programId') != self.prog:
+            program_id = ix.get('programId') if ix.get('programId') else 'unknown'
+            if program_id != self.prog:
+                raw_data = ix.get('data', '')
+                print(f"  🔍 [OTHER] program={program_id}, data={raw_data[:50]}...")
                 continue
 
             raw_data = ix.get('data')
@@ -144,12 +155,12 @@ class Indexer:
     async def run(self):
         from solana.rpc.websocket_api import RpcTransactionLogsFilterMentions
 
-        async with ws.connect(WS_URL) as ws_client:
+        async with ws.connect(ACTIVE_WS_URL) as ws_client:
             await ws_client.logs_subscribe(
                 RpcTransactionLogsFilterMentions(Pubkey.from_string(self.prog)),
                 commitment=Confirmed
             )
-            print("✅ Subscribed! Monitoring activity...")
+            print("✅ Subscribed! Monitoring all transaction activity...")
 
             async for msg in ws_client:
                 msg_str = str(msg)

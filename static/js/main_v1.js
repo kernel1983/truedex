@@ -2,11 +2,20 @@ import { Connection, PublicKey, Transaction, TransactionInstruction } from 'http
 
 const rc = React.createElement;
 const LightweightCharts = window.LightweightCharts;
-// const TESTNET_INDEXER_URL = 'https://testnet3.zentra.dev';
-// const TESTNET_INDEXER_URL = 'http://127.0.0.1:8090';
 const TESTNET_INDEXER_URL = 'http://127.0.0.1:3000';
-const SOLANA_PROGRAM = '2AxT8e7Jq2vgoPNo8uT1Go3Huifdx5XWm4CntKz4aiih';
-const RPC_URL = 'http://127.0.0.1:8899';
+
+const USE_DEVNET = true; // Set to true for devnet, false for local test validator
+
+const CONFIG = USE_DEVNET ? {
+  SOLANA_PROGRAM: '2AxT8e7Jq2vgoPNo8uT1Go3Huifdx5XWm4CntKz4aiih',
+  RPC_URL: 'https://api.devnet.solana.com',
+} : {
+  SOLANA_PROGRAM: '2AxT8e7Jq2vgoPNo8uT1Go3Huifdx5XWm4CntKz4aiih',
+  RPC_URL: 'http://127.0.0.1:8899',
+};
+
+const SOLANA_PROGRAM = CONFIG.SOLANA_PROGRAM;
+const RPC_URL = CONFIG.RPC_URL;
 
 function getConnection() {
   const wallet = getAllWallets();
@@ -71,7 +80,10 @@ class Header extends React.Component {
         walletLoading ?
           null :
           (solAddress ?
-            rc('span', { className: 'font-mono' }, `${solAddress.substring(0, 6)}...${solAddress.substring(solAddress.length - 4)}`) :
+            rc('div', { className: 'flex items-center gap-2' },
+              rc('span', { className: 'font-mono text-sm' }, `${solAddress.substring(0, 6)}...${solAddress.substring(solAddress.length - 4)}`),
+              rc('button', { onClick: this.props.handleWalletLogout, className: 'bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm' }, 'Logout')
+            ) :
             rc('button', { onClick: this.props.handleWalletLogin, className: 'bg-gray-200 hover:bg-gray-400 text-black font-bold py-2 px-4 rounded' }, 'Connect Wallet'))
       )
     );
@@ -246,7 +258,7 @@ class OrderPanel extends React.Component {
       activeTab: 'Limit',
       tradeType: 'Buy',
       price: '68000',
-      size: '',
+      size: '0.01',
       rangeValue: '0',
       sizeUnit: 'BTC',
       balance: {
@@ -346,7 +358,7 @@ class OrderPanel extends React.Component {
   };
 
   handleTradeTypeChange = (type) => {
-    this.setState({ tradeType: type, size: '', rangeValue: '0' });
+    this.setState({ tradeType: type, size: '0.01', rangeValue: '0' });
   };
 
   handleSizeUnitChange = () => {
@@ -425,15 +437,15 @@ class OrderPanel extends React.Component {
       });
       transaction.add(ix);
 
-      try {
+      // try {
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = (await getConnection().getLatestBlockhash()).blockhash;
-        const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
+        const signature = await sendTransaction(transaction, getConnection());
         console.log('Transaction sent:', signature);
-      } catch (error) {
-        console.error('Order failed:', error);
-        alert('Order failed.');
-      }
+      // } catch (error) {
+      //   console.error('Order failed:', error);
+      //   alert('Order failed.');
+      // }
     } else {
       if (!size || isNaN(parseFloat(size)) || parseFloat(size) <= 0) {
         alert('Please enter a valid size');
@@ -471,7 +483,7 @@ class OrderPanel extends React.Component {
       try {
         transaction.feePayer = publicKey;
         transaction.recentBlockhash = (await getConnection().getLatestBlockhash()).blockhash;
-        const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
+        const signature = await sendTransaction(transaction, getConnection());
         console.log('Transaction sent:', signature);
       } catch (error) {
         console.error('Order failed:', error);
@@ -677,6 +689,11 @@ class App extends React.Component {
     this.reconnectTimeout = null;
   }
 
+  componentDidMount() {
+    this.loadInitialMarketData();
+    this.initializeWallet();
+  }
+
   loadInitialMarketData = async () => {
     try {
       const response = await fetch(`${TESTNET_INDEXER_URL}/api/orderbook?base=BTC&quote=USDC`);
@@ -695,7 +712,8 @@ class App extends React.Component {
 
 initializeWallet = async () => {
   const wallet = getAllWallets();
-  console.log('initializeWallet called, wallet:', wallet, 'type:', wallet ? wallet.constructor.name : null);
+  console.log('initializeWallet called, wallet:', wallet);
+  // alert('initializeWallet: ' + (wallet ? 'found' : 'not found'));
   if (!wallet) {
     this.setState({ walletLoading: false });
     return;
@@ -757,6 +775,23 @@ handleWalletLogin = async () => {
   }
 }
 
+handleWalletLogout = async () => {
+  const wallet = getAllWallets();
+  if (wallet && wallet.disconnect) {
+    try {
+      await wallet.disconnect();
+    } catch (e) {
+      console.error('Error disconnecting:', e);
+    }
+  }
+  this.setState({
+    solAddress: null,
+    publicKey: null,
+    sendTransaction: null,
+    walletLoading: false
+  });
+}
+
 startStream = () => {
   if (this.ws) return;
   // ...
@@ -797,7 +832,7 @@ handleStreamOpen = () => {
   render() {
     const commonLayout = (mainPanel, sidePanel1, sidePanel2) => {
       return rc('div', { className: 'app' },
-        rc(Header, { walletState: this.state, handleWalletLogin: this.handleWalletLogin }),
+        rc(Header, { walletState: this.state, handleWalletLogin: this.handleWalletLogin, handleWalletLogout: this.handleWalletLogout }),
         rc('main', { className: 'p-4' },
           rc('div', { className: 'flex flex-col lg:flex-row gap-4' },
             rc('div', { className: 'flex-grow' },
@@ -841,7 +876,7 @@ handleStreamOpen = () => {
     }
 
     return rc('div', { className: 'app' },
-      rc(Header, { walletState: this.state, handleWalletLogin: this.handleWalletLogin }),
+      rc(Header, { walletState: this.state, handleWalletLogin: this.handleWalletLogin, handleWalletLogout: this.handleWalletLogout }),
       rc('main', { className: 'p-4' },
         rc('div', { className: 'flex gap-4' },
           rc('div', { className: 'flex-grow space-y-4' },
