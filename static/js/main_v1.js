@@ -7,7 +7,14 @@ const LightweightCharts = window.LightweightCharts;
 const TESTNET_INDEXER_URL = 'http://127.0.0.1:3000';
 const SOLANA_PROGRAM = '2AxT8e7Jq2vgoPNo8uT1Go3Huifdx5XWm4CntKz4aiih';
 const RPC_URL = 'http://127.0.0.1:8899';
-const SOLANA_CONNECTION = new Connection(RPC_URL);
+
+function getConnection() {
+  const wallet = getAllWallets();
+  if (wallet && wallet.connection) {
+    return wallet.connection;
+  }
+  return new Connection(RPC_URL);
+}
 
 const parseJsonWithBigInt = (data_json) => JSON.parse(
   data_json,
@@ -420,7 +427,7 @@ class OrderPanel extends React.Component {
 
       try {
         transaction.feePayer = publicKey;
-        transaction.recentBlockhash = (await SOLANA_CONNECTION.getLatestBlockhash()).blockhash;
+        transaction.recentBlockhash = (await getConnection().getLatestBlockhash()).blockhash;
         const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
         console.log('Transaction sent:', signature);
       } catch (error) {
@@ -463,7 +470,7 @@ class OrderPanel extends React.Component {
 
       try {
         transaction.feePayer = publicKey;
-        transaction.recentBlockhash = (await SOLANA_CONNECTION.getLatestBlockhash()).blockhash;
+        transaction.recentBlockhash = (await getConnection().getLatestBlockhash()).blockhash;
         const signature = await sendTransaction(transaction, SOLANA_CONNECTION);
         console.log('Transaction sent:', signature);
       } catch (error) {
