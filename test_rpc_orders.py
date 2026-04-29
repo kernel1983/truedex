@@ -23,15 +23,15 @@ if __name__ == '__main__':
     print('=== Create BUY limit orders ===')
     for i in range(3):
         price = 660 - i * 10  # 660, 650, 640
-        amount = 1 * 10**18
-        quote = price * 10**6
+        amount = int(0.5 * 10**18)
+        quote = price * amount * (10**6) // (10**18)
         call = f'{{"p": "zen", "f": "trade_limit_order", "a": ["BTC", {amount}, "USDC", -{quote}]}}'
         print(f'Buy Limit {i+1}: price={price}, amount={amount // 10**18}')
         tx_hash = transaction(call)
         print(f'  tx: {tx_hash}')
 
     print('=== Market SELL ===')
-    amount = 0.1 * 10**18
+    amount = int(0.1 * 10**18)
     call = f'{{"p": "zen", "f": "trade_market_order", "a": ["BTC", -{amount}, "USDC", null]}}'
     print(f'Market SELL: amount={amount // 10**18}')
     tx_hash = transaction(call)
@@ -45,4 +45,4 @@ if __name__ == '__main__':
     print(f'  tx: {tx_hash}')
 
 
-    print('\n=== Done ===')
+    # print('\n=== Done ===')
