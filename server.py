@@ -330,12 +330,18 @@ class HistoryAPIHandler(BaseHandler):
         interval_sec = interval_seconds[interval]
 
         K = 10**18
+        # Get quote token decimal for proper price display
+        quote_decimal, _ = space.get(quote, 'decimal', 6)
+        # Price stored as: total_quote * K // total_base
+        # quote_amount = price * base_amount / K
+        # To display price in quote token decimal: price / (K / 10^(18-decimal)) = price / 10^decimal
+        price_divisor = 10**quote_decimal
         block_trades = {}
 
         for block_num in space.events:
             evts = space.events[block_num]
             for evt in evts:
-                if evt["event"] == "TradeOrderTake":
+                if evt["event"] in ["TradeLimitTake", "TradeMarketTake"]:
                     args = evt["args"]
                     if args[0] == pair:
                         if block_num not in block_trades:
@@ -360,7 +366,7 @@ class HistoryAPIHandler(BaseHandler):
                 "high": max(prices),
                 "low": min(prices),
                 "close": prices[-1],
-                "volume": sum(t.get("amount", 0) for t in trades) / K,
+                "volume": sum(t.get("amount", 0) for t in trades),
                 "block_num": block_num
             }
             block_candles.append(candle)
@@ -390,10 +396,10 @@ class HistoryAPIHandler(BaseHandler):
         result.reverse()
 
         for c in result:
-            c["open"] = c["open"] / K
-            c["high"] = c["high"] / K
-            c["low"] = c["low"] / K
-            c["close"] = c["close"] / K
+            c["open"] = c["open"] / price_divisor
+            c["high"] = c["high"] / price_divisor
+            c["low"] = c["low"] / price_divisor
+            c["close"] = c["close"] / price_divisor
             del c["block_nums"]
 
         self.finish({"candles": result})

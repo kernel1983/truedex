@@ -207,9 +207,9 @@ def trade_limit_order(info, args):
     price = 0
     if total_base > 0:
         price = total_quote * K // total_base
-    event('TradeOrderMake', [pair, buy_or_sell, addr, make_amount, price, order_id])
+    event('TradeLimitMake', [pair, buy_or_sell, addr, make_amount, price, order_id])
     if take_amount > 0:
-        event('TradeOrderTake', [pair, buy_or_sell, addr, take_amount, price])
+        event('TradeLimitTake', [pair, buy_or_sell, addr, take_amount, price])
 
 
 def trade_market_order(info, args):
@@ -476,7 +476,7 @@ def trade_market_order(info, args):
 
     if take_base > 0:
         price = take_quote * K // take_base
-        event('TradeOrderTake', [pair, buy_or_sell, addr, take_base, price])
+        event('TradeMarketTake', [pair, buy_or_sell, addr, take_base, price])
 
 
 def trade_limit_order_cancel(info, args):
