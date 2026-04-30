@@ -142,42 +142,58 @@ class Indexer:
 
     async def run(self):
         from solana.rpc.websocket_api import RpcTransactionLogsFilterMentions
+        import websockets
 
-        async with ws.connect(ACTIVE_WS_URL) as ws_client:
-            await ws_client.logs_subscribe(
-                RpcTransactionLogsFilterMentions(Pubkey.from_string(self.prog)),
-                commitment=Confirmed
-            )
-            print("✅ Subscribed! Monitoring all transaction activity...")
+        retry_delay = 5
+        max_retry_delay = 60
 
-            async for msg in ws_client:
-                msg_str = str(msg)
-                sigs = re.findall(r'signature: "([a-zA-Z0-9]{32,})"', msg_str)
-                if not sigs: sigs = re.findall(r'signature=([a-zA-Z0-9]{32,})', msg_str)
+        while True:
+            try:
+                print(f"🔌 Connecting to {ACTIVE_WS_URL}...")
+                async with ws.connect(ACTIVE_WS_URL) as ws_client:
+                    await ws_client.logs_subscribe(
+                        RpcTransactionLogsFilterMentions(Pubkey.from_string(self.prog)),
+                        commitment=Confirmed
+                    )
+                    print("✅ Subscribed! Monitoring all transaction activity...")
+                    retry_delay = 5
 
-                for s in set(sigs):
-                    if s in self.processed_signatures:
-                        continue
-                    self.processed_signatures.add(s)
-                    print(f"\n🔔 Event Detected: {s}")
-                    await asyncio.sleep(1.0)
-                    result = self.process_transaction(s)
-                    if result:
-                        try:
-                            call = json.loads(result.get("text", "{}"))
-                            payload = {
-                                "info": {
-                                    "name": call.get("f"),
-                                    "block_time": result.get("block_time"),
-                                    "slot": result.get("slot"),
-                                    "sender": result.get("sender"),
-                                    "txhash": s,
-                                },
-                                "args": call.get("a", []),
-                            }
-                        except:
-                            payload = {"info": {}, "args": []}
-                        await self.send_to_server(payload)
+                    async for msg in ws_client:
+                        msg_str = str(msg)
+                        sigs = re.findall(r'signature: "([a-zA-Z0-9]{32,})"', msg_str)
+                        if not sigs: sigs = re.findall(r'signature=([a-zA-Z0-9]{32,})', msg_str)
+
+                        for s in set(sigs):
+                            if s in self.processed_signatures:
+                                continue
+                            self.processed_signatures.add(s)
+                            print(f"\n🔔 Event Detected: {s}")
+                            await asyncio.sleep(1.0)
+                            result = self.process_transaction(s)
+                            if result:
+                                try:
+                                    call = json.loads(result.get("text", "{}"))
+                                    payload = {
+                                        "info": {
+                                            "name": call.get("f"),
+                                            "block_time": result.get("block_time"),
+                                            "slot": result.get("slot"),
+                                            "sender": result.get("sender"),
+                                            "txhash": s,
+                                        },
+                                        "args": call.get("a", []),
+                                    }
+                                except:
+                                    payload = {"info": {}, "args": []}
+                                await self.send_to_server(payload)
+
+            except (websockets.exceptions.ConnectionClosedError, 
+                    websockets.exceptions.ConnectionClosedOK,
+                    Exception) as e:
+                print(f"❌ WebSocket error: {e}")
+                print(f"🔄 Reconnecting in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_retry_delay)
 
 if __name__ == "__main__":
     indexer = Indexer()
