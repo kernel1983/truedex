@@ -313,12 +313,13 @@ class HistoryAPIHandler(BaseHandler):
 
         base = self.get_argument("base")
         quote = self.get_argument("quote")
-        interval = self.get_argument("interval", "1h")
+        interval = self.get_argument("interval", "1s")
         limit = int(self.get_argument("limit", "100"))
 
         pair = f"{base}_{quote}"
 
         interval_seconds = {
+            "1s": 1,
             "1m": 60,
             "5m": 300,
             "15m": 900,
@@ -326,7 +327,7 @@ class HistoryAPIHandler(BaseHandler):
             "1d": 86400
         }
         if interval not in interval_seconds:
-            interval = "1h"
+            interval = "1s"
         interval_sec = interval_seconds[interval]
 
         K = 10**18
@@ -394,6 +395,48 @@ class HistoryAPIHandler(BaseHandler):
         sorted_times = sorted(candles.keys(), reverse=True)[:limit]
         result = [candles[t] for t in sorted_times]
         result.reverse()
+
+        # Fill gaps with previous close price
+        if result:
+            filled = [result[0]]
+            for candle in result[1:]:
+                prev = filled[-1]
+                expected = prev["time"] + interval_sec
+                while expected < candle["time"]:
+                    filled.append({
+                        "time": expected,
+                        "open": prev["close"],
+                        "high": prev["close"],
+                        "low": prev["close"],
+                        "close": prev["close"],
+                        "volume": 0,
+                        "block_nums": []
+                    })
+                    expected += interval_sec
+                filled.append(candle)
+            result = filled
+
+            # Fill to current time
+            import time
+            now = int(time.time())
+            now = (now // interval_sec) * interval_sec  # Align to interval boundary
+            last_candle = result[-1]
+            expected = last_candle["time"] + interval_sec
+            while expected <= now:
+                result.append({
+                    "time": expected,
+                    "open": last_candle["close"],
+                    "high": last_candle["close"],
+                    "low": last_candle["close"],
+                    "close": last_candle["close"],
+                    "volume": 0,
+                    "block_nums": []
+                })
+                last_candle = result[-1]
+                expected += interval_sec
+
+            # Apply limit after filling to current time
+            result = result[-limit:]
 
         for c in result:
             c["open"] = c["open"] / price_divisor

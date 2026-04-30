@@ -30,40 +30,68 @@ class TestHistoryAPI(tornado.testing.AsyncHTTPTestCase):
         space.block_times.clear()
         space.states.clear()
 
-    # def test_single_candle(self):
-    #     """Single candle when trades in same time bucket"""
-    #     pair = "BTC_USDC"
-    #     base, quote = pair.split("_")
-    #     base_time = int(time.time()) // 3600 * 3600
-
-    #     space.block_times[100] = base_time
-    #     space.events[100] = [
-    #         {"event": "TradeLimitTake", "args": [pair, "buy", 0, 10**18, 50000000]},
-    #         {"event": "TradeLimitTake", "args": [pair, "sell", 0, 2*10**18, 52000000]},
-    #     ]
-
-    #     resp = self.fetch(f"/api/history?base={base}&quote={quote}&interval=1h")
-    #     data = json.loads(resp.body)
-    #     print(f"Single candle: {json.dumps(data['candles'], indent=2)}")
-    #     self.assertEqual(len(data['candles']), 1)
-
-    def test_multiple_candles(self):
-        """Multiple candles for different time buckets"""
+    def test_fill_gaps(self):
+        """Fill empty time buckets with previous close price"""
         pair = "BTC_USDC"
         base, quote = pair.split("_")
         base_time = int(time.time()) // 3600 * 3600
 
-        for i in range(7):
+        # Hour 0: close=50
+        space.block_times[100] = base_time
+        space.events[100] = [
+            {"event": "TradeLimitTake", "args": [pair, "buy", 0, 10**18, 50000000]},
+        ]
+
+        # Hour 2: close=53 (skip hour 1)
+        space.block_times[101] = base_time + 7200
+        space.events[101] = [
+            {"event": "TradeLimitTake", "args": [pair, "buy", 0, 10**18, 53000000]},
+        ]
+
+        resp = self.fetch(f"/api/history?base={base}&quote={quote}&interval=1h&limit=5")
+        data = json.loads(resp.body)
+        candles = data['candles']
+        print(f"\nFill gaps test ({len(candles)} candles):")
+        for c in candles:
+            print(f"  time={c['time']}, open={c['open']}, high={c['high']}, low={c['low']}, close={c['close']}, volume={c['volume']}")
+
+        # Should have 3 candles: hour 0, 1 (filled), 2
+        self.assertEqual(len(candles), 3)
+
+        # Hour 0: actual data
+        self.assertEqual(candles[0]['time'], base_time)
+        self.assertEqual(candles[0]['close'], 50.0)
+
+        # Hour 1: filled with previous close
+        self.assertEqual(candles[1]['time'], base_time + 3600)
+        self.assertEqual(candles[1]['close'], 50.0)  # filled with previous close
+        self.assertEqual(candles[1]['open'], 50.0)
+        self.assertEqual(candles[1]['high'], 50.0)
+        self.assertEqual(candles[1]['low'], 50.0)
+        self.assertEqual(candles[1]['volume'], 0)
+
+        # Hour 2: actual data
+        self.assertEqual(candles[2]['time'], base_time + 7200)
+        self.assertEqual(candles[2]['close'], 53.0)
+
+    def test_no_gaps(self):
+        """No gaps when trades are consecutive"""
+        pair = "BTC_USDC"
+        base, quote = pair.split("_")
+        base_time = int(time.time()) // 3600 * 3600
+
+        for i in range(3):
             block = 100 + i
-            space.block_times[block] = base_time + i * 1800
+            space.block_times[block] = base_time + i * 3600
             space.events[block] = [
                 {"event": "TradeLimitTake", "args": [pair, "buy", 0, 10**18, 50000000 + i*1000000]},
             ]
 
         resp = self.fetch(f"/api/history?base={base}&quote={quote}&interval=1h")
         data = json.loads(resp.body)
-        print(f"Multiple candles ({len(data['candles'])}): {json.dumps(data['candles'], indent=2)}")
-        self.assertEqual(len(data['candles']), 4)
+        candles = data['candles']
+        print(f"\nNo gaps test ({len(candles)} candles)")
+        self.assertEqual(len(candles), 3)
 
 
 if __name__ == "__main__":
