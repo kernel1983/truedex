@@ -93,15 +93,55 @@ class Header extends React.Component {
 class ChartPanel extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { history: [] };
+    this.state = { history: [], interval: '1s', localCandles: [] };
     this.chart = null;
     this.candleSeries = null;
     this.chartRef = React.createRef();
+    this.timer = null;
   }
 
   componentDidMount() {
     this.initChart();
     this.loadHistory();
+    this.startAutoRefresh();
+  }
+
+  componentWillUnmount() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  startAutoRefresh = () => {
+    if (this.timer) clearInterval(this.timer);
+    // Check every second for new candle
+    this.timer = setInterval(() => {
+      const { localCandles, interval } = this.state;
+      if (!localCandles.length) return;
+
+      const intervalSec = {
+        '1s': 1, '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '1d': 86400
+      }[interval] || 3600;
+
+      const now = Math.floor(Date.now() / 1000);
+      const bucket = Math.floor(now / intervalSec) * intervalSec;
+      const lastCandle = localCandles[localCandles.length - 1];
+
+      if (bucket > lastCandle.time) {
+        // Time moved to new bucket, create new candle with previous close
+        const newCandle = {
+          time: bucket,
+          open: lastCandle.close,
+          high: lastCandle.close,
+          low: lastCandle.close,
+          close: lastCandle.close,
+          volume: 0
+        };
+        const newCandles = [...localCandles, newCandle];
+        this.setState({ localCandles: newCandles });
+        if (this.candleSeries) {
+          this.candleSeries.setData(newCandles);
+        }
+      }
+    }, 1000); // Check every second
   }
 
   initChart() {
@@ -125,24 +165,171 @@ class ChartPanel extends React.Component {
 
 
   loadHistory = async () => {
+    const { interval } = this.state;
     try {
-      const response = await fetch(`${TESTNET_INDEXER_URL}/api/history?base=BTC&quote=USDC`);
+      const response = await fetch(`${TESTNET_INDEXER_URL}/api/history?base=BTC&quote=USDC&interval=${interval}`);
       const data = await response.json();
       const candles = data.candles || [];
 
       if (this.candleSeries && candles.length > 0) {
         this.candleSeries.setData(candles);
       }
-      this.setState({ history: candles });
+      this.setState({ history: candles, localCandles: candles });
     } catch (error) {
       console.error('Failed to load history:', error);
     }
   }
 
+  handleIntervalChange = (interval) => {
+    this.setState({ interval }, () => {
+      this.loadHistory();
+    });
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    // 切换周期时重新加载
+    if (this.state.interval !== prevState.interval) {
+      this.loadHistory();
+    }
+    // 新交易到来时更新蜡烛图
+    if (this.props.streamTrades !== prevProps.streamTrades && this.props.streamTrades) {
+      console.log('🔄 Updating candles with trades:', this.props.streamTrades);
+      this.updateCandlesWithTrades(this.props.streamTrades);
+    }
+  }
+
+  updateCandlesWithTrades = (trades) => {
+    const { interval } = this.state;
+    console.log(`updateCandlesWithTrades called, interval=${interval}, trades:`, trades);
+
+    const intervalSec = {
+      '1s': 1, '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '1d': 86400
+    }[interval] || 3600;
+
+    let { localCandles } = this.state;
+
+    if (!this.candleSeries) {
+      console.error('candleSeries is null!');
+      return;
+    }
+
+    // 滑动窗口大小：1s=300(5分钟), 1m=300(5小时), 1h=200(200小时)
+    const MAX_CANDLES = { '1s': 300, '1m': 300, '5m': 300, '15m': 300, '1h': 200, '1d': 100 }[interval] || 300;
+
+    trades.forEach(trade => {
+      const tradeTime = trade.timestamp || Math.floor(Date.now() / 1000);
+      const bucket = Math.floor(tradeTime / intervalSec) * intervalSec;
+      console.log(`trade: price=${trade.price}, bucket=${bucket}`);
+
+      if (!localCandles.length) {
+        // 无历史数据：创建第一个蜡烛
+        const firstCandle = {
+          time: bucket,
+          open: trade.price,
+          high: trade.price,
+          low: trade.price,
+          close: trade.price,
+          volume: trade.amount || 0
+        };
+        localCandles = [firstCandle];
+        console.log('First candle:', firstCandle);
+        return; // 处理下一个 trade
+      }
+
+      // 查找对应的 candle（二分查找，因为 localCandles 按 time 排序）
+      let idx = -1;
+      for (let i = localCandles.length - 1; i >= 0; i--) {
+        if (localCandles[i].time === bucket) {
+          idx = i;
+          break;
+        }
+        if (localCandles[i].time < bucket) break; // 已排序，可提前退出
+      }
+
+      if (idx >= 0) {
+        // 找到对应时间桶：更新该蜡烛
+        const oldCandle = localCandles[idx];
+        const updatedCandle = {
+          ...oldCandle,
+          high: Math.max(oldCandle.high, trade.price),
+          low: Math.min(oldCandle.low, trade.price),
+          close: trade.price,
+          volume: (oldCandle.volume || 0) + (trade.amount || 0)
+        };
+        localCandles[idx] = updatedCandle;
+        console.log('Updating candle at idx', idx, ':', updatedCandle);
+      } else if (bucket > localCandles[localCandles.length - 1].time) {
+        // 新时间桶（超过最新）：追加
+        const newCandle = {
+          time: bucket,
+          open: trade.price,
+          high: trade.price,
+          low: trade.price,
+          close: trade.price,
+          volume: trade.amount || 0
+        };
+        localCandles = [...localCandles, newCandle];
+        console.log('New candle (append):', newCandle);
+      } else if (bucket < localCandles[0].time) {
+        // 旧时间桶（早于最早）：在开头插入
+        const newCandle = {
+          time: bucket,
+          open: trade.price,
+          high: trade.price,
+          low: trade.price,
+          close: trade.price,
+          volume: trade.amount || 0
+        };
+        localCandles = [newCandle, ...localCandles];
+        console.log('New candle (prepend):', newCandle);
+      } else {
+        // 中间缺失的时间桶：插入到正确位置
+        let insertIdx = localCandles.length;
+        for (let i = 0; i < localCandles.length; i++) {
+          if (localCandles[i].time > bucket) {
+            insertIdx = i;
+            break;
+          }
+        }
+        const newCandle = {
+          time: bucket,
+          open: trade.price,
+          high: trade.price,
+          low: trade.price,
+          close: trade.price,
+          volume: trade.amount || 0
+        };
+        localCandles = [...localCandles.slice(0, insertIdx), newCandle, ...localCandles.slice(insertIdx)];
+        console.log('New candle (insert at', insertIdx, '):', newCandle);
+      }
+    });
+
+    // 滑动窗口：只保留最近 MAX_CANDLES 个
+    if (localCandles.length > MAX_CANDLES) {
+      localCandles = localCandles.slice(-MAX_CANDLES);
+    }
+
+    // 一次性更新图表
+    this.candleSeries.setData(localCandles);
+    this.setState({ localCandles });
+  }
+
   render() {
-    const { history } = this.state;
+    const { history, interval } = this.state;
+    const intervals = ['1s', '1m', '5m', '15m', '1h', '1d'];
     return rc('div', { className: 'chart-panel bg-gray-900 p-4 rounded-lg' },
-      rc('h2', { className: 'text-lg font-bold text-white mb-2' }, `Market Chart (${history.length} trades)`),
+      rc('div', { className: 'flex justify-between items-center mb-2' },
+        rc('h2', { className: 'text-lg font-bold text-white' }, `Market Chart (${history.length} trades)`),
+        rc('div', { className: 'flex gap-1' },
+          intervals.map(iv =>
+            rc('button', {
+              key: iv,
+              onClick: () => this.handleIntervalChange(iv),
+              className: `px-2 py-1 text-xs rounded ${interval === iv ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`
+            }, iv)
+          )
+        )
+      ),
       rc('div', { ref: this.chartRef, className: 'w-full' })
     );
   }
@@ -794,12 +981,34 @@ handleWalletLogout = async () => {
 
 startStream = () => {
   if (this.ws) return;
-  // ...
-}
+  const wsUrl = TESTNET_INDEXER_URL.replace(/^http/, 'ws') + '/ws';
+  console.log('🔌 Connecting to WebSocket:', wsUrl);
+  this.ws = new WebSocket(wsUrl);
 
-handleStreamOpen = () => {
+  this.ws.onopen = () => console.log('✅ WebSocket connected');
+
+  this.ws.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      this.handleStreamOpen(payload);
+    } catch (e) {
+      console.error('WebSocket message error:', e);
+    }
+  };
+
+  this.ws.onclose = () => {
+    console.log('❌ WebSocket disconnected, reconnecting in 5s...');
+    this.ws = null;
+    setTimeout(() => this.startStream(), 5000);
+  };
+
+  this.ws.onerror = (error) => console.error('WebSocket error:', error);
+};
+
+handleStreamOpen = (payload) => {
     if (!payload) return;
 
+    // 处理订单簿更新
     if (payload.type === 'orderbook' || payload.orderbook || payload.bids || payload.asks || payload.buys || payload.sells) {
       const bids = payload.bids || payload.buys || (payload.orderbook && payload.orderbook.bids) || [];
       const asks = payload.asks || payload.sells || (payload.orderbook && payload.orderbook.asks) || [];
@@ -813,6 +1022,22 @@ handleStreamOpen = () => {
           }
         });
       }
+    }
+
+    // 处理新交易：解析服务端广播的格式
+    if (payload.type === 'trade' && payload.price !== undefined) {
+      const trade = {
+        price: payload.price,
+        amount: payload.amount,
+        timestamp: payload.timestamp,
+        side: payload.side
+      };
+
+      this.setState(prev => ({
+        trades: [trade, ...prev.trades].slice(0, 200),
+        streamTrades: [trade]
+      }));
+      return;
     }
 
     if (payload.type === 'trade' || payload.trades) {

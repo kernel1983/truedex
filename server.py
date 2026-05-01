@@ -3,9 +3,13 @@ from urllib.parse import unquote
 
 import tornado.web
 import tornado.ioloop
+import tornado.websocket
 
 import space
 import func
+
+# WebSocket clients for real-time push
+connected_clients = set()
 
 func.load_all_zips()
 
@@ -525,6 +529,34 @@ class IndexerAPIHandler(BaseHandler):
                 wrapped = func.namespace[func_name]
                 result = wrapped.f(info, call_args)
                 print("[IndexerAPIHandler] result: " + str(result))
+
+                # Broadcast new trade to WS clients BEFORE finish
+                if func_name in ["trade_limit_order", "trade_market_order"]:
+                    # Get the actual trade event from space.events
+                    block_number = info.get("block_number")
+                    if block_number and block_number in space.events:
+                        for evt in space.events[block_number]:
+                            if evt["event"] in ["TradeLimitTake", "TradeMarketTake"]:
+                                evt_args = evt["args"]
+                                if len(evt_args) >= 5:
+                                    pair = evt_args[0]
+                                    parts = pair.split("_")
+                                    if len(parts) == 2:
+                                        base, quote = parts
+                                        quote_decimal, _ = space.get(quote, 'decimal', 6)
+                                        base_decimal = 18  # BTC decimal
+
+                                        trade_msg = {
+                                            "type": "trade",
+                                            "timestamp": info.get("block_time"),
+                                            "price": evt_args[4] / (10**quote_decimal),
+                                            "amount": evt_args[3] / (10**base_decimal),
+                                            "side": evt_args[1],
+                                            "pair": pair
+                                        }
+                                        broadcast(json.dumps(trade_msg))
+                                break
+
                 self.finish({"result": result})
             else:
                 self.set_status(400)
@@ -534,6 +566,32 @@ class IndexerAPIHandler(BaseHandler):
             traceback.print_exc()
             self.set_status(500)
             self.finish({"error": str(e)})
+
+
+class WSHandler(tornado.websocket.WebSocketHandler):
+    def open(self):
+        connected_clients.add(self)
+        print(f"✅ WS client connected, total: {len(connected_clients)}")
+
+    def on_close(self):
+        connected_clients.discard(self)
+        print(f"❌ WS client disconnected, total: {len(connected_clients)}")
+
+    def check_origin(self, origin):
+        return True  # Allow CORS in dev
+
+
+def broadcast(message):
+    """Push message to all connected WS clients"""
+    to_remove = set()
+    for client in connected_clients:
+        try:
+            client.write_message(message)
+        except Exception as e:
+            print(f"Broadcast error: {e}")
+            to_remove.add(client)
+    for c in to_remove:
+        connected_clients.discard(c)
 
 
 def start_server():
@@ -551,6 +609,7 @@ def start_server():
         (r"/api/orderbook", OrderbookAPIHandler),
         (r"/api/history", HistoryAPIHandler),
         (r"/api/events", EventsAPIHandler),
+        (r"/ws", WSHandler),
     ], debug=True)
     app.listen(3000)
     tornado.ioloop.IOLoop.current().start()

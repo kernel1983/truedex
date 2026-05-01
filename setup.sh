@@ -1,7 +1,5 @@
 #!/bin/bash
 
-cd /mnt/c/Repositories/solana_indexer
-
 tmux new-window -d
 tmux new-window -d
 tmux new-window -d
@@ -19,6 +17,8 @@ tmux send-keys -t :3 "cd /mnt/c/Repositories/solana_indexer && sleep 10 && pytho
 
 # Tab 2: server
 tmux send-keys -t :2 "cd /mnt/c/Repositories/solana_indexer && python server.py" Enter
+
+tmux send-keys -t :0 "cd /mnt/c/Repositories/solana_indexer" Enter
 
 
 # Tab 1
