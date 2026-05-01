@@ -28,53 +28,8 @@ class BaseHandler(tornado.web.RequestHandler):
 # === Debug Pages ===
 
 class DebugBaseHandler(BaseHandler):
-    def render_debug_page(self, title, content):
-        html = (
-            '<!DOCTYPE html>\n'
-            '<html>\n<head>\n'
-            '    <meta charset="utf-8">\n'
-            '    <title>Debug: ' + title + '</title>\n'
-            '    <style>\n'
-            '        body { font-family: monospace; margin: 20px; background: #f5f5f5; }\n'
-            '        h1, h2, h3 { color: #333; }\n'
-            '        table { border-collapse: collapse; width: 100%; background: white; margin: 10px 0; }\n'
-            '        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n'
-            '        th { background: #4CAF50; color: white; }\n'
-            '        tr:nth-child(even) { background: #f9f9f9; }\n'
-            '        tr:hover { background: #e0e0e0; }\n'
-            '        a { color: #0066cc; text-decoration: none; }\n'
-            '        a:hover { text-decoration: underline; }\n'
-            '        .stats { background: white; padding: 15px; border-radius: 5px; margin: 10px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n'
-            '        .collapsible { cursor: pointer; background: #f0f0f0; }\n'
-            '        .content { display: none; }\n'
-            '        input[type=text] { padding: 5px; width: 300px; margin: 5px; }\n'
-            '        button { padding: 5px 10px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 3px; }\n'
-            '        button:hover { background: #45a049; }\n'
-            '        pre { white-space: pre-wrap; word-wrap: break-word; }\n'
-            '    </style>\n'
-            '    <script>\n'
-            '        function toggle(id) {\n'
-            '            const el = document.getElementById(id);\n'
-            '            el.style.display = el.style.display === "none" ? "block" : "none";\n'
-            '        }\n'
-            '        function filterTable(inputId, tableId) {\n'
-            '            const input = document.getElementById(inputId);\n'
-            '            const filter = input.value.toUpperCase();\n'
-            '            const table = document.getElementById(tableId);\n'
-            '            const trs = table.getElementsByTagName("tr");\n'
-            '            for (let i = 1; i < trs.length; i++) {\n'
-            '                const txt = trs[i].textContent || trs[i].innerText;\n'
-            '                trs[i].style.display = txt.toUpperCase().includes(filter) ? "" : "none";\n'
-            '            }\n'
-            '        }\n'
-            '    </script>\n'
-            '</head>\n<body>\n'
-            '    <h1>Debug: ' + title + '</h1>\n'
-            '    <p><a href="/debug/">Back to Overview</a></p>\n'
-            + content +
-            '</body>\n</html>\n'
-        )
-        self.finish(html)
+    def render_debug_page(self, template_name, **kwargs):
+        self.render(f"debug/{template_name}", **kwargs)
 
 
 class DebugOverviewHandler(DebugBaseHandler):
@@ -83,29 +38,19 @@ class DebugOverviewHandler(DebugBaseHandler):
         total_events = sum(len(v) for v in space.events.values())
         total_txs = len(space.transactions)
 
-        content = (
-            '<div class="stats">\n'
-            '    <h3>Statistics</h3>\n'
-            '    <p><b>Latest Block:</b> ' + str(space.latest_block_number) + '</p>\n'
-            '    <p><b>Total Blocks:</b> ' + str(len(space.blocks)) + '</p>\n'
-            '    <p><b>Total Transactions:</b> ' + str(total_txs) + '</p>\n'
-            '    <p><b>Total Events:</b> ' + str(total_events) + '</p>\n'
-            '    <p><b>Total State Entries:</b> ' + str(total_state_entries) + '</p>\n'
-            '</div>\n'
-            '<h3>Quick Links</h3>\n'
-            '<ul>\n'
-            '    <li><a href="/debug/blocks">Blocks List</a></li>\n'
-            '    <li><a href="/debug/events">Events Browser</a></li>\n'
-            '    <li><a href="/debug/state">State Browser</a></li>\n'
-            '    <li><a href="/debug/transactions">Transactions List</a></li>\n'
-            '</ul>\n'
+        self.render_debug_page("overview.html",
+            title="Overview",
+            latest_block=space.latest_block_number,
+            total_blocks=len(space.blocks),
+            total_txs=total_txs,
+            total_events=total_events,
+            total_state_entries=total_state_entries
         )
-        self.render_debug_page("Overview", content)
 
 
 class DebugBlocksHandler(DebugBaseHandler):
     def get(self):
-        rows = ""
+        blocks = []
         for blk_num in sorted(space.blocks.keys(), reverse=True)[:100]:
             blk_hash = space.block_hashes.get(blk_num, None)
             blk_time = space.block_times.get(blk_num, None)
@@ -113,23 +58,14 @@ class DebugBlocksHandler(DebugBaseHandler):
             evt_count = len(space.events.get(blk_num, []))
             hash_str = (str(blk_hash)[:16] + "...") if blk_hash else "None"
             time_str = str(blk_time) if blk_time else "None"
-            rows += (
-                '<tr>\n'
-                '    <td><a href="/debug/block/' + str(blk_num) + '">' + str(blk_num) + '</a></td>\n'
-                '    <td>' + hash_str + '</td>\n'
-                '    <td>' + time_str + '</td>\n'
-                '    <td>' + str(tx_count) + '</td>\n'
-                '    <td>' + str(evt_count) + '</td>\n'
-                '</tr>\n'
-            )
-        content = (
-            '<input type="text" id="filterInput" onkeyup="filterTable(\'filterInput\', \'blocksTable\')" placeholder="Filter blocks...">\n'
-            '<table id="blocksTable">\n'
-            '    <tr><th>Block #</th><th>Hash</th><th>Time</th><th>Tx Count</th><th>Event Count</th></tr>\n'
-            + rows +
-            '</table>\n'
-        )
-        self.render_debug_page("Blocks", content)
+            blocks.append({
+                "num": blk_num,
+                "hash": hash_str,
+                "time": time_str,
+                "tx_count": tx_count,
+                "evt_count": evt_count
+            })
+        self.render_debug_page("blocks.html", title="Blocks", blocks=blocks)
 
 
 class DebugBlockHandler(DebugBaseHandler):
@@ -140,63 +76,45 @@ class DebugBlockHandler(DebugBaseHandler):
         txs = space.blocks.get(blk_num, [])
         evts = space.events.get(blk_num, [])
 
-        tx_rows = ""
+        tx_list = []
         for tx in txs:
             tx_hash = tx[1] if isinstance(tx, tuple) else tx
             tx_data = space.transactions.get(tx_hash, {})
-            tx_rows += "<tr><td>" + str(tx_hash) + "</td><td><pre>" + json.dumps(tx_data, indent=2) + "</pre></td></tr>\n"
+            tx_list.append({"hash": str(tx_hash), "data": json.dumps(tx_data, indent=2)})
 
-        evt_rows = ""
+        evt_list = []
         for evt in evts:
-            evt_rows += "<tr><td>" + str(evt.get("event")) + "</td><td><pre>" + json.dumps(evt.get("args"), indent=2) + "</pre></td></tr>\n"
+            evt_list.append({"event": str(evt.get("event")), "args": json.dumps(evt.get("args"), indent=2)})
 
         hash_str = str(blk_hash) if blk_hash else "None"
         time_str = str(blk_time) if blk_time else "None"
 
-        content = (
-            "<h3>Block #" + str(blk_num) + "</h3>\n"
-            "<p><b>Hash:</b> " + hash_str + "</p>\n"
-            "<p><b>Time:</b> " + time_str + "</p>\n"
-            "<h4>Transactions (" + str(len(txs)) + ")</h4>\n"
-            "<table><tr><th>Tx Hash</th><th>Data</th></tr>" + tx_rows + "</table>\n"
-            "<h4>Events (" + str(len(evts)) + ")</h4>\n"
-            "<table><tr><th>Event</th><th>Args</th></tr>" + evt_rows + "</table>\n"
+        self.render_debug_page("block.html",
+            title="Block " + str(blk_num),
+            blk_num=blk_num,
+            blk_hash=hash_str,
+            blk_time=time_str,
+            txs=tx_list,
+            evts=evt_list
         )
-        self.render_debug_page("Block " + str(blk_num), content)
 
 
 class DebugEventsHandler(DebugBaseHandler):
     def get(self):
-        rows = ""
+        blocks = []
         for blk_num in sorted(space.events.keys(), reverse=True):
             evts = space.events[blk_num]
-            rows += (
-                '<tr class="collapsible" onclick="toggle(\'evts_' + str(blk_num) + '\')">\n'
-                '    <td><b>Block ' + str(blk_num) + '</b></td>\n'
-                '    <td>' + str(len(evts)) + ' events</td>\n'
-                '</tr>\n'
-                '<tr id="evts_' + str(blk_num) + '" class="content">\n'
-                '    <td colspan="2">\n'
-                '        <table>\n'
-                '            <tr><th>Event</th><th>Args</th></tr>\n'
-            )
+            evt_list = []
             for evt in evts:
-                rows += "<tr><td>" + str(evt.get("event")) + "</td><td><pre>" + json.dumps(evt.get("args"), indent=2) + "</pre></td></tr>\n"
-            rows += '        </table></td></tr>\n'
-
-        content = (
-            '<table>\n'
-            '    <tr><th>Block</th><th>Event Count</th></tr>\n'
-            + rows +
-            '</table>\n'
-        )
-        self.render_debug_page("Events", content)
+                evt_list.append({"event": str(evt.get("event")), "args": json.dumps(evt.get("args"), indent=2)})
+            blocks.append({"num": blk_num, "count": len(evts), "events": evt_list})
+        self.render_debug_page("events.html", title="Events", blocks=blocks)
 
 
 class DebugStateHandler(DebugBaseHandler):
     def get(self):
         prefix = self.get_argument("prefix", "")
-        rows = ""
+        entries = []
         count = 0
         max_entries = 500
         for block_num in sorted(space.states.keys(), reverse=True):
@@ -205,38 +123,27 @@ class DebugStateHandler(DebugBaseHandler):
                 if prefix and not key.startswith(prefix):
                     continue
                 addr, value = state[key]
-                rows += "<tr><td>" + str(key) + "</td><td>" + str(addr) + "</td><td>" + str(value) + " (block " + str(block_num) + ")</td></tr>\n"
+                entries.append({"key": str(key), "owner": str(addr), "value": str(value), "block_num": block_num})
                 count += 1
                 if count >= max_entries:
                     break
             if count >= max_entries:
                 break
-        content = (
-            '<form>\n'
-            '    <label>Filter by prefix: <input type="text" name="prefix" value="' + prefix + '"></label>\n'
-            '    <button type="submit">Filter</button>\n'
-            '</form>\n'
-            '<p>Showing ' + str(count) + ' entries (max ' + str(max_entries) + ').</p>\n'
-            '<table>\n'
-            '    <tr><th>Key</th><th>Owner</th><th>Value</th></tr>\n'
-            + rows +
-            '</table>\n'
+        self.render_debug_page("state.html",
+            title="State Browser",
+            prefix=prefix,
+            entries=entries,
+            count=count,
+            max_entries=max_entries
         )
-        self.render_debug_page("State Browser", content)
 
 
 class DebugTransactionsHandler(DebugBaseHandler):
     def get(self):
-        rows = ""
+        transactions = []
         for tx_hash, tx_data in sorted(space.transactions.items()):
-            rows += "<tr><td>" + str(tx_hash) + "</td><td><pre>" + json.dumps(tx_data, indent=2) + "</pre></td></tr>\n"
-        content = (
-            '<table>\n'
-            '    <tr><th>Tx Hash</th><th>Data</th></tr>\n'
-            + rows +
-            '</table>\n'
-        )
-        self.render_debug_page("Transactions", content)
+            transactions.append({"hash": str(tx_hash), "data": json.dumps(tx_data, indent=2)})
+        self.render_debug_page("transactions.html", title="Transactions", transactions=transactions)
 
 
 class GetLatestStateAPIHandler(BaseHandler):
@@ -610,7 +517,7 @@ def start_server():
         (r"/api/history", HistoryAPIHandler),
         (r"/api/events", EventsAPIHandler),
         (r"/ws", WSHandler),
-    ], debug=True)
+    ], template_path="templates", debug=True)
     app.listen(3000)
     tornado.ioloop.IOLoop.current().start()
 
