@@ -9,14 +9,22 @@ from solders.instruction import Instruction, AccountMeta as AM
 
 from setting import PROGRAM_ID
 
-def transaction(call):
+def transaction(call, keypair=None):
     client = Client("http://localhost:8899")
-    kp = Keypair.from_json(open("/home/debian/.config/solana/id.json").read())
+    
+    # 支持传入 Keypair 对象或路径
+    if isinstance(keypair, Keypair):
+        kp = keypair
+    elif isinstance(keypair, str):
+        kp = Keypair.from_json(open(keypair).read())
+    else:
+        kp = Keypair.from_json(open("/home/debian/.config/solana/id.json").read())
+    
     payer = kp.pubkey()
     prog = P.from_string(PROGRAM_ID)
     
     print(f"{payer} executing call")
-    data = call.encode('utf8')
+    data = call.encode('utf-8')
     
     calldata_ix = Instruction(
         program_id=prog,

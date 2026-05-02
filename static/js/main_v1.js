@@ -67,7 +67,7 @@ class Header extends React.Component {
     return rc('header', { className: 'header p-4 flex justify-between items-center bg-gray-800 text-white' },
       rc('div', { className: 'logo flex items-center' },
         rc('img', { src: 'logo.svg', alt: 'Logo', className: 'h-8 w-8 mr-2' }),
-        rc('span', { className: 'text-xl font-bold' }, 'OrderBook')
+        rc('span', { className: 'text-xl font-bold' }, 'TrueDEX')
       ),
       rc('nav', { className: 'menu' },
         rc('ul', { className: 'flex space-x-4' },
