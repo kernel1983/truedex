@@ -133,7 +133,8 @@ class ChartPanel extends React.Component {
           high: lastCandle.close,
           low: lastCandle.close,
           close: lastCandle.close,
-          volume: 0
+          volume: 0,
+          is_filled: true // 定时补全的蜡烛标记为 filled
         };
         const newCandles = [...localCandles, newCandle];
         this.setState({ localCandles: newCandles });
@@ -208,15 +209,24 @@ class ChartPanel extends React.Component {
 
     let { localCandles } = this.state;
 
+    // 确保所有蜡烛都有 is_filled 字段
+    // localCandles = localCandles.map(c => ({
+    //   ...c,
+    //   is_filled: c.is_filled !== undefined ? c.is_filled : true // 默认为 true（向后兼容）
+    // }));
+
     if (!this.candleSeries) {
       console.error('candleSeries is null!');
       return;
     }
 
-    // 滑动窗口大小：1s=300(5分钟), 1m=300(5小时), 1h=200(200小时)
     const MAX_CANDLES = { '1s': 300, '1m': 300, '5m': 300, '15m': 300, '1h': 200, '1d': 100 }[interval] || 300;
 
-    trades.forEach(trade => {
+    // 记录被更新的蜡烛索引
+    let updatedIdx = -1;
+
+    // 遍历每笔交易
+    for (const trade of trades) {
       const tradeTime = trade.timestamp || Math.floor(Date.now() / 1000);
       const bucket = Math.floor(tradeTime / intervalSec) * intervalSec;
       console.log(`trade: price=${trade.price}, bucket=${bucket}`);
@@ -229,59 +239,69 @@ class ChartPanel extends React.Component {
           high: trade.price,
           low: trade.price,
           close: trade.price,
-          volume: trade.amount || 0
+          volume: (trade.amount || 0),
+          is_filled: false
         };
         localCandles = [firstCandle];
         console.log('First candle:', firstCandle);
-        return; // 处理下一个 trade
+        continue; // 处理下一笔交易
       }
 
-      // 查找对应的 candle（二分查找，因为 localCandles 按 time 排序）
-      let idx = -1;
+      // 查找对应的蜡烛
+      let foundIdx = -1;
       for (let i = localCandles.length - 1; i >= 0; i--) {
         if (localCandles[i].time === bucket) {
-          idx = i;
+          foundIdx = i;
           break;
         }
-        if (localCandles[i].time < bucket) break; // 已排序，可提前退出
+        if (localCandles[i].time < bucket) break;
       }
 
-      if (idx >= 0) {
+      if (foundIdx >= 0) {
         // 找到对应时间桶：更新该蜡烛
-        const oldCandle = localCandles[idx];
-        const updatedCandle = {
-          ...oldCandle,
-          high: Math.max(oldCandle.high, trade.price),
-          low: Math.min(oldCandle.low, trade.price),
+        const oldC = localCandles[foundIdx];
+
+        localCandles[foundIdx] = {
+          ...oldC,
+          high: Math.max(oldC.high, trade.price),
+          low: Math.min(oldC.low, trade.price),
           close: trade.price,
-          volume: (oldCandle.volume || 0) + (trade.amount || 0)
+          volume: (oldC.volume || 0) + (trade.amount || 0),
+          is_filled: false
         };
-        localCandles[idx] = updatedCandle;
-        console.log('Updating candle at idx', idx, ':', updatedCandle);
+        updatedIdx = foundIdx;
+        console.log('Updating candle at', foundIdx, ':', localCandles[foundIdx]);
+
       } else if (bucket > localCandles[localCandles.length - 1].time) {
         // 新时间桶（超过最新）：追加
-        const newCandle = {
+        const newC = {
           time: bucket,
           open: trade.price,
           high: trade.price,
           low: trade.price,
           close: trade.price,
-          volume: trade.amount || 0
+          volume: (trade.amount || 0),
+          is_filled: false
         };
-        localCandles = [...localCandles, newCandle];
-        console.log('New candle (append):', newCandle);
+        localCandles = [...localCandles, newC];
+        updatedIdx = localCandles.length - 1;
+        console.log('New candle (append):', newC);
+
       } else if (bucket < localCandles[0].time) {
         // 旧时间桶（早于最早）：在开头插入
-        const newCandle = {
+        const newC = {
           time: bucket,
           open: trade.price,
           high: trade.price,
           low: trade.price,
           close: trade.price,
-          volume: trade.amount || 0
+          volume: (trade.amount || 0),
+          is_filled: false
         };
-        localCandles = [newCandle, ...localCandles];
-        console.log('New candle (prepend):', newCandle);
+        localCandles = [newC, ...localCandles];
+        updatedIdx = 0;
+        console.log('New candle (prepend):', newC);
+
       } else {
         // 中间缺失的时间桶：插入到正确位置
         let insertIdx = localCandles.length;
@@ -291,28 +311,51 @@ class ChartPanel extends React.Component {
             break;
           }
         }
-        const newCandle = {
+        const newC = {
           time: bucket,
           open: trade.price,
           high: trade.price,
           low: trade.price,
           close: trade.price,
-          volume: trade.amount || 0
+          volume: (trade.amount || 0),
+          is_filled: false
         };
-        localCandles = [...localCandles.slice(0, insertIdx), newCandle, ...localCandles.slice(insertIdx)];
-        console.log('New candle (insert at', insertIdx, '):', newCandle);
+        localCandles = [
+          ...localCandles.slice(0, insertIdx),
+          newC,
+          ...localCandles.slice(insertIdx)
+        ];
+        updatedIdx = insertIdx;
+        console.log('New candle (insert at', insertIdx, '):', newC);
       }
-    });
+    }
 
     // 滑动窗口：只保留最近 MAX_CANDLES 个
     if (localCandles.length > MAX_CANDLES) {
       localCandles = localCandles.slice(-MAX_CANDLES);
     }
 
-    // 确保 open 承接前一个 close，让 K 线视觉连续
+    // 从头计算 open：承接前一个 close
     if (localCandles.length > 1) {
       for (let i = 1; i < localCandles.length; i++) {
         localCandles[i].open = localCandles[i-1].close;
+      }
+    }
+
+    // 重算后续蜡烛的 open：更新所有 is_filled==true 的蜡烛，直到第一个 is_filled==false 也更新后 break
+    if (updatedIdx >= 0) {
+      console.log(updatedIdx, localCandles.length);
+      for (let i = updatedIdx + 1; i < localCandles.length; i++) {
+        if (localCandles[i].is_filled) {
+          localCandles[i].open = localCandles[i-1].close;
+          localCandles[i].close = localCandles[i-1].close;
+          localCandles[i].high = localCandles[i-1].close;
+          localCandles[i].low = localCandles[i-1].close;
+        }
+        console.log(`Recomputed candle at idx ${i}: open=${localCandles[i].open}, is_filled=${localCandles[i].is_filled}`);
+        if (!localCandles[i].is_filled) {
+          break; // 更新完第一个真实交易蜡烛后停止
+        }
       }
     }
 
@@ -320,6 +363,7 @@ class ChartPanel extends React.Component {
     this.candleSeries.setData(localCandles);
     this.setState({ localCandles });
   }
+
 
   render() {
     const { history, interval } = this.state;

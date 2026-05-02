@@ -294,7 +294,8 @@ class HistoryAPIHandler(BaseHandler):
                     "low": candle["low"],
                     "close": candle["close"],
                     "volume": candle["volume"],
-                    "block_nums": [candle["block_num"]]
+                    "block_nums": [candle["block_num"]],
+                    "is_filled": False  # 真实交易蜡烛
                 }
             else:
                 candles[bucket]["high"] = max(candles[bucket]["high"], candle["high"])
@@ -302,6 +303,7 @@ class HistoryAPIHandler(BaseHandler):
                 candles[bucket]["close"] = candle["close"]
                 candles[bucket]["volume"] += candle["volume"]
                 candles[bucket]["block_nums"].append(candle["block_num"])
+                candles[bucket]["is_filled"] = False  # 合并后仍是真实蜡烛
 
         sorted_times = sorted(candles.keys(), reverse=True)[:limit]
         result = [candles[t] for t in sorted_times]
@@ -321,7 +323,8 @@ class HistoryAPIHandler(BaseHandler):
                         "low": prev["close"],
                         "close": prev["close"],
                         "volume": 0,
-                        "block_nums": []
+                        "block_nums": [],
+                        "is_filled": True  # 标记为补全的蜡烛
                     })
                     expected += interval_sec
                 filled.append(candle)
@@ -341,7 +344,8 @@ class HistoryAPIHandler(BaseHandler):
                     "low": last_candle["close"],
                     "close": last_candle["close"],
                     "volume": 0,
-                    "block_nums": []
+                    "block_nums": [],
+                    "is_filled": True  # 标记为补全的蜡烛
                 })
                 last_candle = result[-1]
                 expected += interval_sec
@@ -359,8 +363,11 @@ class HistoryAPIHandler(BaseHandler):
             c["high"] = c["high"] / price_divisor
             c["low"] = c["low"] / price_divisor
             c["close"] = c["close"] / price_divisor
-            del c["block_nums"]
+            if not c.get("is_filled"):
+                del c["block_nums"]
+            # 真实交易的蜡烛保留 block_nums（如果有），补全的删除
 
+        # 返回时包含 is_filled 标记
         self.finish({"candles": result})
 
 
