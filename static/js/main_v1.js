@@ -309,6 +309,13 @@ class ChartPanel extends React.Component {
       localCandles = localCandles.slice(-MAX_CANDLES);
     }
 
+    // 确保 open 承接前一个 close，让 K 线视觉连续
+    if (localCandles.length > 1) {
+      for (let i = 1; i < localCandles.length; i++) {
+        localCandles[i].open = localCandles[i-1].close;
+      }
+    }
+
     // 一次性更新图表
     this.candleSeries.setData(localCandles);
     this.setState({ localCandles });

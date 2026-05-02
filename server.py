@@ -349,6 +349,11 @@ class HistoryAPIHandler(BaseHandler):
             # Apply limit after filling to current time
             result = result[-limit:]
 
+        # 确保 open 承接前一个 close，让 K 线视觉连续
+        if len(result) > 1:
+            for i in range(1, len(result)):
+                result[i]["open"] = result[i-1]["close"]
+
         for c in result:
             c["open"] = c["open"] / price_divisor
             c["high"] = c["high"] / price_divisor
